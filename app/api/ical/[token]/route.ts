@@ -8,12 +8,14 @@ const supabaseAdmin = createClient(
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { token: string } }
+  { params }: { params: Promise<{ token: string }> }
 ) {
+  const { token } = await params
+
   const { data: property } = await supabaseAdmin
     .from('Property')
     .select('id, name')
-    .eq('ourIcalToken', params.token)
+    .eq('ourIcalToken', token)
     .single()
 
   if (!property) {
