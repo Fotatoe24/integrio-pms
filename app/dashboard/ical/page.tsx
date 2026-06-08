@@ -36,63 +36,32 @@ export default function IcalPage() {
     setResults((r) => ({ ...r, [property.id]: "Syncing..." }));
 
     try {
-      const res = await fetch(property.airbnbIcalUrl);
-      const icsText = await res.text();
-
-      // Parse VEVENT blocks
-      const events = icsText.match(/BEGIN:VEVENT[\s\S]*?END:VEVENT/g) || [];
-      let imported = 0;
-
-      for (const event of events) {
-        const uid = event.match(/UID:(.*)/)?.[1]?.trim();
-        const dtstart = event.match(/DTSTART[^:]*:(.*)/)?.[1]?.trim();
-        const dtend = event.match(/DTEND[^:]*:(.*)/)?.[1]?.trim();
-        const summary =
-          event.match(/SUMMARY:(.*)/)?.[1]?.trim() || "Airbnb Guest";
-
-        if (!uid || !dtstart || !dtend) continue;
-
-        // Check if already exists
-        const { data: existing } = await supabase
-          .from("Booking")
-          .select("id")
-          .eq("externalUid", uid)
-          .single();
-
-        if (existing) continue;
-
-        // Parse dates
-        const parseDate = (d: string) => {
-          const clean = d.replace(/T\d{6}Z?$/, "");
-          return `${clean.slice(0, 4)}-${clean.slice(4, 6)}-${clean.slice(
-            6,
-            8
-          )}`;
-        };
-
-        await supabase.from("Booking").insert({
+      const res = await fetch("/api/sync-ical", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           propertyId: property.id,
-          guestName: summary.includes("Reserved") ? "Airbnb Reserved" : summary,
-          checkIn: new Date(parseDate(dtstart)).toISOString(),
-          checkOut: new Date(parseDate(dtend)).toISOString(),
-          status: "CONFIRMED",
-          source: "AIRBNB",
-          externalUid: uid,
-          guestCount: 1,
-        });
-        imported++;
+          airbnbIcalUrl: property.airbnbIcalUrl,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setResults((r) => ({ ...r, [property.id]: `❌ ${data.error}` }));
+        return;
       }
 
       setResults((r) => ({
         ...r,
-        [property.id]: `✅ Synced! ${imported} new booking${
-          imported !== 1 ? "s" : ""
-        } imported.`,
+        [property.id]: `✅ Done! ${data.imported} new booking${
+          data.imported !== 1 ? "s" : ""
+        } imported, ${data.skipped} already existed.`,
       }));
-    } catch {
+    } catch (err) {
       setResults((r) => ({
         ...r,
-        [property.id]: "❌ Sync failed. Check the iCal URL.",
+        [property.id]: `❌ Sync failed: ${String(err)}`,
       }));
     }
 
