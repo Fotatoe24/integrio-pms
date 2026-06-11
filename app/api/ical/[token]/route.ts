@@ -19,6 +19,11 @@ export async function GET(
     .eq('ourIcalToken', token)
     .maybeSingle()
 
+    // ADD THIS TEMPORARILY
+console.log('Token received:', JSON.stringify(token))
+console.log('Property found:', property)
+console.log('Prop error:', propError)
+
   if (propError || !property) {
     // Return empty valid calendar instead of 404
     const empty = [
