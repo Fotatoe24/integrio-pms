@@ -12,44 +12,83 @@ export async function GET(
 ) {
   const { token } = await params
 
-  const { data: property } = await supabaseAdmin
+  // Find property by token
+  const { data: property, error: propError } = await supabaseAdmin
     .from('Property')
     .select('id, name')
     .eq('ourIcalToken', token)
-    .single()
+    .maybeSingle()
 
-  if (!property) {
-    return new NextResponse('Not found', { status: 404 })
+  if (propError || !property) {
+    // Return empty valid calendar instead of 404
+    const empty = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//Integrio PMS//EN',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
+      'END:VCALENDAR',
+    ].join('\r\n')
+
+    return new NextResponse(empty, {
+      headers: {
+        'Content-Type': 'text/calendar; charset=utf-8',
+        'Cache-Control': 'no-cache',
+      },
+    })
   }
 
+  // Get all non-cancelled bookings
   const { data: bookings } = await supabaseAdmin
     .from('Booking')
-    .select('*')
+    .select('id, guestName, checkIn, checkOut, status')
     .eq('propertyId', property.id)
     .not('status', 'eq', 'CANCELLED')
 
-  const formatDate = (dateStr: string) =>
-    new Date(dateStr).toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'
+  const now = new Date()
+  const dtstamp = now.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'
 
-  const events = (bookings || []).map(b => `BEGIN:VEVENT
-UID:${b.id}@integrio
-DTSTART:${formatDate(b.checkIn)}
-DTEND:${formatDate(b.checkOut)}
-SUMMARY:${b.guestName}
-STATUS:CONFIRMED
-END:VEVENT`).join('\n')
+  // Format as all-day DATE (Airbnb prefers this)
+  const formatDate = (dateStr: string) => {
+    const d = new Date(dateStr)
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${y}${m}${day}`
+  }
 
-  const ics = `BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//Integrio PMS//EN
-CALNAME:${property.name}
-${events}
-END:VCALENDAR`
+  const lines: string[] = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Integrio PMS//EN',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    `X-WR-CALNAME:${property.name}`,
+    'X-WR-TIMEZONE:Asia/Manila',
+  ]
+
+  for (const b of bookings || []) {
+    lines.push('BEGIN:VEVENT')
+    lines.push(`UID:${b.id}@integrio-pms`)
+    lines.push(`DTSTAMP:${dtstamp}`)
+    lines.push(`DTSTART;VALUE=DATE:${formatDate(b.checkIn)}`)
+    lines.push(`DTEND;VALUE=DATE:${formatDate(b.checkOut)}`)
+    lines.push(`SUMMARY:Blocked`)
+    lines.push(`STATUS:CONFIRMED`)
+    lines.push('TRANSP:OPAQUE')
+    lines.push('END:VEVENT')
+  }
+
+  lines.push('END:VCALENDAR')
+
+  // Join with CRLF as required by RFC 5545
+  const ics = lines.join('\r\n')
 
   return new NextResponse(ics, {
     headers: {
       'Content-Type': 'text/calendar; charset=utf-8',
       'Content-Disposition': `attachment; filename="${property.name}.ics"`,
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
     },
   })
 }
