@@ -8,6 +8,7 @@ interface Property {
   name: string;
   airbnbIcalUrl: string | null;
   ourIcalToken: string;
+  lastSync: { fetchedAt: string; userAgent: string } | null; // ← add this
 }
 
 export default function IcalPage() {
@@ -26,7 +27,24 @@ export default function IcalPage() {
     const { data } = await supabase
       .from("Property")
       .select("id, name, airbnbIcalUrl, ourIcalToken");
-    if (data) setProperties(data);
+
+    if (data) {
+      // ✅ ADD HERE — fetch last sync for each property
+      const withSync = await Promise.all(
+        data.map(async (p) => {
+          const { data: log } = await supabase
+            .from("IcalFetchLog")
+            .select("fetchedAt, userAgent")
+            .eq("propertyId", p.id)
+            .order("fetchedAt", { ascending: false })
+            .limit(1)
+            .single();
+
+          return { ...p, lastSync: log ?? null };
+        })
+      );
+      setProperties(withSync);
+    }
     setLoading(false);
   }
 
@@ -324,7 +342,20 @@ export default function IcalPage() {
                     }}
                   >
                     {copiedId === p.id ? "✓ Copied!" : "📋 Copy Link"}
-                  </button>
+                  </button>{" "}
+                  <div style={{ fontSize: 13, marginTop: 8 }}>
+                    {p.lastSync ? (
+                      <span style={{ color: "#27ae60" }}>
+                        🟢 Last fetched{" "}
+                        {new Date(p.lastSync.fetchedAt).toLocaleString("en-PH")}
+                        {p.lastSync.userAgent
+                          ?.toLowerCase()
+                          .includes("airbnb") && " by Airbnb"}
+                      </span>
+                    ) : (
+                      <span style={{ color: "#8896a5" }}>⚪ Never fetched</span>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

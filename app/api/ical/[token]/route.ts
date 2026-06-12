@@ -46,6 +46,18 @@ export async function GET(
     });
   }
 
+  (async () => {
+    try {
+      await supabaseAdmin.from("IcalFetchLog").insert({
+        propertyId: property.id,
+        token,
+        userAgent: req.headers.get("user-agent") ?? "unknown",
+        ip: req.headers.get("x-forwarded-for") ?? "unknown",
+        fetchedAt: new Date().toISOString(),
+      });
+    } catch (_) {}
+  })();
+
   // Get all non-cancelled bookings
   const { data: bookings } = await supabaseAdmin
     .from("Booking")
