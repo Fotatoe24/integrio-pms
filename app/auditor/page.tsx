@@ -95,22 +95,39 @@ export default function AuditorPage() {
     setLoading(true);
     const ownerId = u.owner_id ?? u.id;
 
-    const [{ data: exp }, { data: pay }, { data: book }] = await Promise.all([
-      supabase
-        .from("ExpenseNote")
-        .select("*")
-        .eq("owner_id", ownerId)
-        .order("createdAt", { ascending: false }),
-      supabase
-        .from("Payment")
-        .select("*, Booking(guestName, Property(name))")
-        .order("createdAt", { ascending: false }),
-      supabase
-        .from("Booking")
-        .select("*, Property(name)")
-        .order("checkIn", { ascending: false })
-        .limit(50),
-    ]);
+    // Get owner's properties
+    const { data: props } = await supabase
+      .from("Property")
+      .select("id")
+      .eq("owner_id", ownerId);
+
+    const propertyIds = (props ?? []).map((p) => p.id);
+
+    const { data: book } =
+      propertyIds.length > 0
+        ? await supabase
+            .from("Booking")
+            .select("*, Property(name)")
+            .in("propertyId", propertyIds)
+            .order("checkIn", { ascending: false })
+            .limit(50)
+        : { data: [] };
+
+    const bookingIds = (book ?? []).map((b: { id: string }) => b.id);
+    const { data: pay } =
+      bookingIds.length > 0
+        ? await supabase
+            .from("Payment")
+            .select("*, Booking(guestName, Property(name))")
+            .in("bookingId", bookingIds)
+            .order("createdAt", { ascending: false })
+        : { data: [] };
+
+    const { data: exp } = await supabase
+      .from("ExpenseNote")
+      .select("*")
+      .eq("owner_id", ownerId)
+      .order("createdAt", { ascending: false });
 
     if (exp) setExpenseNotes(exp);
     if (pay) setPayments(pay);

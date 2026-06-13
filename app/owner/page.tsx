@@ -114,27 +114,50 @@ export default function OwnerPage() {
     setLoading(true);
     const ownerId = u.id;
 
-    const [{ data: emp }, { data: exp }, { data: pay }, { data: book }] =
-      await Promise.all([
-        supabase
-          .from("User")
-          .select("id, name, email, role, status, createdAt, invited_at")
-          .eq("owner_id", ownerId)
-          .order("createdAt", { ascending: false }),
-        supabase
-          .from("ExpenseNote")
-          .select("*")
-          .eq("owner_id", ownerId)
-          .order("createdAt", { ascending: false }),
-        supabase
-          .from("Payment")
-          .select("*, Booking(guestName, Property(name))")
-          .order("createdAt", { ascending: false }),
-        supabase
-          .from("Booking")
-          .select("*, Property(name)")
-          .order("checkIn", { ascending: false }),
-      ]);
+    // Step 1 — get owner's properties first
+    const { data: props } = await supabase
+      .from("Property")
+      .select("id")
+      .eq("owner_id", ownerId);
+
+    const propertyIds = (props ?? []).map((p) => p.id);
+
+    // Step 2 — get bookings only for those properties
+    const { data: book } =
+      propertyIds.length > 0
+        ? await supabase
+            .from("Booking")
+            .select("*, Property(name)")
+            .in("propertyId", propertyIds)
+            .order("checkIn", { ascending: false })
+        : { data: [] };
+
+    // Step 3 — get payments only for those bookings
+    const bookingIds = (book ?? []).map((b) => b.id);
+    const { data: pay } =
+      bookingIds.length > 0
+        ? await supabase
+            .from("Payment")
+            .select("*, Booking(guestName, Property(name))")
+            .in("bookingId", bookingIds)
+            .order("createdAt", { ascending: false })
+        : { data: [] };
+
+    // Step 4 — employees and expenses (already scoped by owner_id)
+    const [{ data: emp }, { data: exp }] = await Promise.all([
+      supabase
+        .from("User")
+        .select(
+          "id, name, email, role, status, createdAt, invited_at, temp_password"
+        )
+        .eq("owner_id", ownerId)
+        .order("createdAt", { ascending: false }),
+      supabase
+        .from("ExpenseNote")
+        .select("*")
+        .eq("owner_id", ownerId)
+        .order("createdAt", { ascending: false }),
+    ]);
 
     if (emp) setEmployees(emp);
     if (exp) setExpenseNotes(exp);
