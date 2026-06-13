@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 
-export default function ResetPasswordPage() {
+function ResetPasswordForm() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
 
@@ -61,6 +61,145 @@ export default function ResetPasswordPage() {
   }
 
   return (
+    <>
+      {status === "success" ? (
+        <div style={{ textAlign: "center", padding: "20px 0" }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>✅</div>
+          <h2
+            style={{
+              fontSize: 22,
+              color: "#f0ece4",
+              marginBottom: 10,
+              fontWeight: 400,
+            }}
+          >
+            Password Updated!
+          </h2>
+          <p
+            style={{
+              fontSize: 14,
+              color: "rgba(240,236,228,0.5)",
+              fontFamily: "-apple-system, sans-serif",
+            }}
+          >
+            Redirecting to login...
+          </p>
+        </div>
+      ) : !token ? (
+        <div style={{ textAlign: "center", padding: "20px 0" }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>❌</div>
+          <h2
+            style={{
+              fontSize: 20,
+              color: "#f0ece4",
+              marginBottom: 10,
+              fontWeight: 400,
+            }}
+          >
+            Invalid reset link
+          </h2>
+          <p
+            style={{
+              fontSize: 14,
+              color: "rgba(240,236,228,0.5)",
+              fontFamily: "-apple-system, sans-serif",
+            }}
+          >
+            <a href="/forgot-password" style={{ color: "#4ecdc4" }}>
+              Request a new one →
+            </a>
+          </p>
+        </div>
+      ) : (
+        <>
+          <div className="login-header">
+            <h1>Reset password</h1>
+            <p>Enter your new password below</p>
+          </div>
+
+          <form onSubmit={handleSubmit} className="login-form">
+            <div className="field">
+              <label htmlFor="password">New password</label>
+              <input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Min. 8 characters"
+                required
+                minLength={8}
+              />
+            </div>
+
+            <div className="field">
+              <label htmlFor="confirm">Confirm password</label>
+              <input
+                id="confirm"
+                type="password"
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+                placeholder="Repeat your password"
+                required
+              />
+            </div>
+
+            {status === "error" && (
+              <div className="error-msg">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <circle
+                    cx="8"
+                    cy="8"
+                    r="7"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                  />
+                  <path
+                    d="M8 5v3M8 11v.5"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
+                </svg>
+                {message}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              className="login-btn"
+              disabled={status === "loading"}
+            >
+              {status === "loading" ? (
+                <span className="spinner" />
+              ) : (
+                "Update password"
+              )}
+            </button>
+
+            <p
+              style={{
+                textAlign: "center",
+                fontSize: 13,
+                color: "rgba(240,236,228,0.4)",
+                fontFamily: "-apple-system, sans-serif",
+              }}
+            >
+              <a
+                href="/login"
+                style={{ color: "#4ecdc4", textDecoration: "none" }}
+              >
+                ← Back to login
+              </a>
+            </p>
+          </form>
+        </>
+      )}
+    </>
+  );
+}
+
+export default function ResetPasswordPage() {
+  return (
     <div className="login-root">
       <div className="login-bg">
         <div className="orb orb-1" />
@@ -77,138 +216,25 @@ export default function ResetPasswordPage() {
           />
         </div>
 
-        {status === "success" ? (
-          <div style={{ textAlign: "center", padding: "20px 0" }}>
-            <div style={{ fontSize: 48, marginBottom: 16 }}>✅</div>
-            <h2
-              style={{
-                fontSize: 22,
-                color: "#f0ece4",
-                marginBottom: 10,
-                fontWeight: 400,
-              }}
-            >
-              Password Updated!
-            </h2>
-            <p
-              style={{
-                fontSize: 14,
-                color: "rgba(240,236,228,0.5)",
-                fontFamily: "-apple-system, sans-serif",
-              }}
-            >
-              Redirecting to login...
-            </p>
-          </div>
-        ) : !token ? (
-          <div style={{ textAlign: "center", padding: "20px 0" }}>
-            <div style={{ fontSize: 48, marginBottom: 16 }}>❌</div>
-            <h2
-              style={{
-                fontSize: 20,
-                color: "#f0ece4",
-                marginBottom: 10,
-                fontWeight: 400,
-              }}
-            >
-              Invalid reset link
-            </h2>
-            <p
-              style={{
-                fontSize: 14,
-                color: "rgba(240,236,228,0.5)",
-                fontFamily: "-apple-system, sans-serif",
-              }}
-            >
-              <a href="/forgot-password" style={{ color: "#4ecdc4" }}>
-                Request a new one →
-              </a>
-            </p>
-          </div>
-        ) : (
-          <>
-            <div className="login-header">
-              <h1>Reset password</h1>
-              <p>Enter your new password below</p>
-            </div>
-
-            <form onSubmit={handleSubmit} className="login-form">
-              <div className="field">
-                <label htmlFor="password">New password</label>
-                <input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Min. 8 characters"
-                  required
-                  minLength={8}
-                />
-              </div>
-
-              <div className="field">
-                <label htmlFor="confirm">Confirm password</label>
-                <input
-                  id="confirm"
-                  type="password"
-                  value={confirm}
-                  onChange={(e) => setConfirm(e.target.value)}
-                  placeholder="Repeat your password"
-                  required
-                />
-              </div>
-
-              {status === "error" && (
-                <div className="error-msg">
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <circle
-                      cx="8"
-                      cy="8"
-                      r="7"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                    />
-                    <path
-                      d="M8 5v3M8 11v.5"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                  {message}
-                </div>
-              )}
-
-              <button
-                type="submit"
-                className="login-btn"
-                disabled={status === "loading"}
-              >
-                {status === "loading" ? (
-                  <span className="spinner" />
-                ) : (
-                  "Update password"
-                )}
-              </button>
-
-              <p
+        <Suspense
+          fallback={
+            <div style={{ textAlign: "center", padding: "20px 0" }}>
+              <div style={{ fontSize: 48, marginBottom: 16 }}>🔗</div>
+              <h2
                 style={{
-                  textAlign: "center",
-                  fontSize: 13,
-                  color: "rgba(240,236,228,0.4)",
-                  fontFamily: "-apple-system, sans-serif",
+                  fontSize: 20,
+                  color: "#f0ece4",
+                  marginBottom: 10,
+                  fontWeight: 400,
                 }}
               >
-                <a
-                  href="/login"
-                  style={{ color: "#4ecdc4", textDecoration: "none" }}
-                >
-                  ← Back to login
-                </a>
-              </p>
-            </form>
-          </>
-        )}
+                Verifying link...
+              </h2>
+            </div>
+          }
+        >
+          <ResetPasswordForm />
+        </Suspense>
       </div>
 
       <style>{`
