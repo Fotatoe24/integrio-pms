@@ -11,15 +11,7 @@ function generateTempPassword(length = 10) {
   ).join("");
 }
 
-const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 465,
-  secure: true,
-  auth: {
-    user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_APP_PASSWORD,
-  },
-});
+import { transporter } from "@/lib/mailer";
 
 export async function POST(req: NextRequest) {
   try {
