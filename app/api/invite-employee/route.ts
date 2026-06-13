@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check if email already exists
+    // Check if email already exists in our User table
     const { data: existing } = await supabaseAdmin
       .from("User")
       .select("id")
@@ -35,11 +35,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Generate temp password and hash it
+    // Generate temp password
     const tempPassword = generateTempPassword();
     const hashedPassword = await hashPassword(tempPassword);
 
-    // Insert new user
+    // Insert into our User table
     const { data: newUser, error: insertError } = await supabaseAdmin
       .from("User")
       .insert({
@@ -62,51 +62,22 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Send invite email via Resend
-    const appUrl =
-      process.env.NEXT_PUBLIC_APP_URL || "https://your-app.vercel.app";
-    const emailRes = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-      },
-      body: JSON.stringify({
-        from: "Integrio PMS <noreply@yourdomain.com>",
-        to: email,
-        subject: `You've been invited to Integrio PMS`,
-        html: `
-          <div style="font-family: -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 24px; color: #1a2744;">
-            <div style="margin-bottom: 32px;">
-              <span style="font-size: 20px; font-weight: 700; color: #1a2744;">Integrio PMS</span>
-            </div>
-            <h2 style="font-size: 22px; font-weight: 700; margin-bottom: 12px;">You've been invited</h2>
-            <p style="color: #8896a5; font-size: 15px; line-height: 1.6; margin-bottom: 24px;">
-              <strong style="color: #1a2744;">${ownerName}</strong> has added you to their Integrio PMS workspace as a <strong style="color: #1a2744;">${role}</strong>.
-            </p>
-            <div style="background: #f0f4f8; border-radius: 12px; padding: 20px 24px; margin-bottom: 28px;">
-              <div style="margin-bottom: 12px;">
-                <div style="font-size: 11px; font-weight: 600; color: #8896a5; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px;">Email</div>
-                <div style="font-size: 15px; color: #1a2744; font-weight: 600;">${email}</div>
-              </div>
-              <div>
-                <div style="font-size: 11px; font-weight: 600; color: #8896a5; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px;">Temporary password</div>
-                <div style="font-size: 18px; color: #1a2744; font-weight: 700; letter-spacing: 0.08em; font-family: monospace;">${tempPassword}</div>
-              </div>
-            </div>
-            <a href="${appUrl}/login" style="display: inline-block; background: linear-gradient(135deg, #1a2744, #2cb5b0); color: white; text-decoration: none; padding: 13px 28px; border-radius: 10px; font-size: 14px; font-weight: 600;">
-              Sign in to Integrio →
-            </a>
-            <p style="color: #8896a5; font-size: 12px; margin-top: 32px; line-height: 1.6;">
-              Please change your password after your first login. If you weren't expecting this invite, you can ignore this email.
-            </p>
-          </div>
-        `,
-      }),
-    });
+    // Send invite via Supabase built-in email
+    const { error: inviteError } =
+      await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
+        data: {
+          name,
+          role,
+          owner_id: ownerId,
+          owner_name: ownerName,
+        },
+        redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/login`,
+      });
 
-    if (!emailRes.ok) {
-      console.error("Resend email failed:", await emailRes.text());
+    if (inviteError) {
+      console.error("Supabase invite error:", inviteError.message);
+      // User was created in our table but email failed
+      // Still return success — owner can share credentials manually
       return NextResponse.json({
         ok: true,
         warning:
