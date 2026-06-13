@@ -8,7 +8,8 @@ const publicRoutes = [
   "/setup",
   "/test",
   "/verify",
-  "/api/ical", // ← add this
+  "/api/ical",
+  "/api/invite-employee",
 ];
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
