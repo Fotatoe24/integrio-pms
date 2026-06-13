@@ -1,62 +1,56 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { supabase } from "@/lib/supabase";
+import { useSearchParams } from "next/navigation";
 
 export default function ResetPasswordPage() {
+  const searchParams = useSearchParams();
+  const token = searchParams.get("token");
+
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [status, setStatus] = useState<
     "idle" | "loading" | "success" | "error"
   >("idle");
   const [message, setMessage] = useState("");
-  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    // Supabase puts the session in the URL hash after redirect
-    supabase.auth.onAuthStateChange((event) => {
-      if (event === "PASSWORD_RECOVERY") {
-        setReady(true);
-      }
-    });
-  }, []);
+    document.title = "Reset Password — Integrio";
+    if (!token) {
+      setStatus("error");
+      setMessage("Invalid or missing reset link. Please request a new one.");
+    }
+  }, [token]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
     if (password !== confirm) {
       setStatus("error");
-      setMessage("Passwords do not match");
+      setMessage("Passwords do not match.");
       return;
     }
 
-    if (password.length < 6) {
+    if (password.length < 8) {
       setStatus("error");
-      setMessage("Password must be at least 6 characters");
+      setMessage("Password must be at least 8 characters.");
       return;
     }
 
     setStatus("loading");
 
-    const { error } = await supabase.auth.updateUser({ password });
+    const res = await fetch("/api/reset-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, password }),
+    });
 
-    if (error) {
+    const json = await res.json();
+
+    if (!res.ok) {
       setStatus("error");
-      setMessage(error.message);
+      setMessage(json.error || "Something went wrong.");
       return;
-    }
-
-    // Also update our User table password
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (user) {
-      const bcrypt = await import("bcryptjs");
-      const hashed = await bcrypt.hash(password, 12);
-      await supabase
-        .from("User")
-        .update({ password: hashed })
-        .eq("email", user.email!);
     }
 
     setStatus("success");
@@ -106,9 +100,9 @@ export default function ResetPasswordPage() {
               Redirecting to login...
             </p>
           </div>
-        ) : !ready ? (
+        ) : !token ? (
           <div style={{ textAlign: "center", padding: "20px 0" }}>
-            <div style={{ fontSize: 48, marginBottom: 16 }}>🔗</div>
+            <div style={{ fontSize: 48, marginBottom: 16 }}>❌</div>
             <h2
               style={{
                 fontSize: 20,
@@ -117,7 +111,7 @@ export default function ResetPasswordPage() {
                 fontWeight: 400,
               }}
             >
-              Verifying link...
+              Invalid reset link
             </h2>
             <p
               style={{
@@ -126,9 +120,8 @@ export default function ResetPasswordPage() {
                 fontFamily: "-apple-system, sans-serif",
               }}
             >
-              If this takes too long,{" "}
               <a href="/forgot-password" style={{ color: "#4ecdc4" }}>
-                request a new link
+                Request a new one →
               </a>
             </p>
           </div>
@@ -141,20 +134,20 @@ export default function ResetPasswordPage() {
 
             <form onSubmit={handleSubmit} className="login-form">
               <div className="field">
-                <label htmlFor="password">New Password</label>
+                <label htmlFor="password">New password</label>
                 <input
                   id="password"
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Min. 6 characters"
+                  placeholder="Min. 8 characters"
                   required
-                  minLength={6}
+                  minLength={8}
                 />
               </div>
 
               <div className="field">
-                <label htmlFor="confirm">Confirm Password</label>
+                <label htmlFor="confirm">Confirm password</label>
                 <input
                   id="confirm"
                   type="password"
@@ -194,9 +187,25 @@ export default function ResetPasswordPage() {
                 {status === "loading" ? (
                   <span className="spinner" />
                 ) : (
-                  "Update Password"
+                  "Update password"
                 )}
               </button>
+
+              <p
+                style={{
+                  textAlign: "center",
+                  fontSize: 13,
+                  color: "rgba(240,236,228,0.4)",
+                  fontFamily: "-apple-system, sans-serif",
+                }}
+              >
+                <a
+                  href="/login"
+                  style={{ color: "#4ecdc4", textDecoration: "none" }}
+                >
+                  ← Back to login
+                </a>
+              </p>
             </form>
           </>
         )}

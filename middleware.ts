@@ -10,6 +10,8 @@ const publicRoutes = [
   "/verify",
   "/api/ical",
   "/api/invite-employee",
+  "/api/forgot-password",
+  "/api/reset-password",
 ];
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
