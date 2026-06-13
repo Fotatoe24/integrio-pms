@@ -57,12 +57,21 @@ export default function LoginPage() {
           email: user.email,
           name: user.name,
           role: user.role,
+          owner_id: user.owner_id ?? null,
         })
       );
 
-      window.location.href = "/dashboard";
+      const roleRoutes: Record<string, string> = {
+        owner: "/owner",
+        booker: "/dashboard",
+        auditor: "/auditor",
+        housekeeping: "/housekeeping",
+        ADMIN: "/owner",
+        STAFF: "/dashboard",
+      };
 
-      router.push("/dashboard");
+      const destination = roleRoutes[user.role] ?? "/dashboard";
+      window.location.href = destination;
     } catch {
       setError("Something went wrong. Please try again.");
       setLoading(false);
