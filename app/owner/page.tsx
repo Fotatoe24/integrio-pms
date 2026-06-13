@@ -60,10 +60,6 @@ interface Booking {
   Property?: { name: string };
 }
 
-const [receivers, setReceivers] = useState<Receiver[]>([]);
-const [newReceiverName, setNewReceiverName] = useState("");
-const [addingReceiver, setAddingReceiver] = useState(false);
-
 const ROLES = ["booker", "auditor", "housekeeping"];
 
 const ROLE_COLORS: Record<string, { bg: string; color: string }> = {
@@ -117,6 +113,10 @@ export default function OwnerPage() {
   const [inviting, setInviting] = useState(false);
   const [inviteError, setInviteError] = useState("");
   const [inviteSuccess, setInviteSuccess] = useState("");
+
+  const [receivers, setReceivers] = useState<Receiver[]>([]);
+  const [newReceiverName, setNewReceiverName] = useState("");
+  const [addingReceiver, setAddingReceiver] = useState(false);
 
   useEffect(() => {
     document.title = "Owner — Integrio";
