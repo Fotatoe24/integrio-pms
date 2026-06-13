@@ -5,7 +5,13 @@ import { useRouter } from "next/navigation";
 import { requireRole, IntegrioUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 
-type Tab = "Overview" | "Employees" | "Expenses" | "Payments" | "Bookings";
+type Tab =
+  | "Overview"
+  | "Employees"
+  | "Receivers"
+  | "Expenses"
+  | "Payments"
+  | "Bookings";
 
 interface Employee {
   id: string;
@@ -37,6 +43,13 @@ interface Payment {
   Booking?: { guestName: string; Property?: { name: string } };
 }
 
+interface Receiver {
+  id: string;
+  name: string;
+  owner_id: string;
+  createdAt: string;
+}
+
 interface Booking {
   id: string;
   guestName: string;
@@ -46,6 +59,10 @@ interface Booking {
   source: string;
   Property?: { name: string };
 }
+
+const [receivers, setReceivers] = useState<Receiver[]>([]);
+const [newReceiverName, setNewReceiverName] = useState("");
+const [addingReceiver, setAddingReceiver] = useState(false);
 
 const ROLES = ["booker", "auditor", "housekeeping"];
 
@@ -159,11 +176,39 @@ export default function OwnerPage() {
         .order("createdAt", { ascending: false }),
     ]);
 
+    const { data: rec } = await supabase
+      .from("Receiver")
+      .select("*")
+      .eq("owner_id", ownerId)
+      .order("createdAt", { ascending: true });
+
+    if (rec) setReceivers(rec);
     if (emp) setEmployees(emp);
     if (exp) setExpenseNotes(exp);
     if (pay) setPayments(pay);
     if (book) setBookings(book);
     setLoading(false);
+  }
+
+  async function handleAddReceiver() {
+    if (!newReceiverName.trim() || !user) return;
+    setAddingReceiver(true);
+    const { data, error } = await supabase
+      .from("Receiver")
+      .insert({ owner_id: user.id, name: newReceiverName.trim() })
+      .select()
+      .single();
+    if (!error && data) {
+      setReceivers((prev) => [...prev, data]);
+      setNewReceiverName("");
+    }
+    setAddingReceiver(false);
+  }
+
+  async function handleRemoveReceiver(id: string) {
+    if (!confirm("Remove this receiver?")) return;
+    const { error } = await supabase.from("Receiver").delete().eq("id", id);
+    if (!error) setReceivers((prev) => prev.filter((r) => r.id !== id));
   }
 
   async function handleInvite() {
@@ -285,6 +330,7 @@ export default function OwnerPage() {
   const TABS: Tab[] = [
     "Overview",
     "Employees",
+    "Receivers",
     "Expenses",
     "Payments",
     "Bookings",
@@ -623,6 +669,185 @@ export default function OwnerPage() {
                 </button>
               ))}
             </div>
+
+            {activeTab === "Receivers" && (
+              <div
+                style={{ display: "flex", flexDirection: "column", gap: 16 }}
+              >
+                {/* Add receiver */}
+                <div
+                  style={{
+                    background: "white",
+                    borderRadius: 16,
+                    boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+                    padding: "24px",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: "#8896a5",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.06em",
+                      marginBottom: 14,
+                    }}
+                  >
+                    Add money receiver
+                  </div>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <input
+                      type="text"
+                      value={newReceiverName}
+                      onChange={(e) => setNewReceiverName(e.target.value)}
+                      placeholder="e.g. Sir James, Ate Rosa"
+                      onKeyDown={(e) =>
+                        e.key === "Enter" && handleAddReceiver()
+                      }
+                      style={{
+                        flex: 1,
+                        padding: "11px 14px",
+                        border: "1.5px solid #e8edf3",
+                        borderRadius: 10,
+                        fontSize: 14,
+                        color: "#1a2744",
+                        outline: "none",
+                        fontFamily: "inherit",
+                      }}
+                      onFocus={(e) =>
+                        (e.currentTarget.style.borderColor = "#2cb5b0")
+                      }
+                      onBlur={(e) =>
+                        (e.currentTarget.style.borderColor = "#e8edf3")
+                      }
+                    />
+                    <button
+                      onClick={handleAddReceiver}
+                      disabled={addingReceiver || !newReceiverName.trim()}
+                      style={{
+                        background:
+                          addingReceiver || !newReceiverName.trim()
+                            ? "#e8edf3"
+                            : "linear-gradient(135deg, #1a2744, #2cb5b0)",
+                        color:
+                          addingReceiver || !newReceiverName.trim()
+                            ? "#8896a5"
+                            : "white",
+                        border: "none",
+                        borderRadius: 10,
+                        padding: "11px 24px",
+                        fontSize: 14,
+                        fontWeight: 600,
+                        cursor:
+                          addingReceiver || !newReceiverName.trim()
+                            ? "not-allowed"
+                            : "pointer",
+                        boxShadow:
+                          addingReceiver || !newReceiverName.trim()
+                            ? "none"
+                            : "0 4px 16px rgba(44,181,176,0.3)",
+                      }}
+                    >
+                      {addingReceiver ? "Adding..." : "+ Add"}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Receivers list */}
+                {receivers.length === 0 ? (
+                  <div
+                    style={{
+                      background: "white",
+                      borderRadius: 16,
+                      padding: 60,
+                      textAlign: "center",
+                      boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+                    }}
+                  >
+                    <div style={{ fontSize: 48, marginBottom: 16 }}>💰</div>
+                    <h3 style={{ color: "#1a2744", marginBottom: 8 }}>
+                      No receivers yet
+                    </h3>
+                    <p style={{ color: "#8896a5", fontSize: 14 }}>
+                      Add the people who collect payments.
+                    </p>
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 10,
+                    }}
+                  >
+                    {receivers.map((r) => (
+                      <div
+                        key={r.id}
+                        style={{
+                          background: "white",
+                          borderRadius: 14,
+                          boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+                          padding: "16px 24px",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 12,
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: 38,
+                              height: 38,
+                              borderRadius: 10,
+                              background:
+                                "linear-gradient(135deg, #1a2744, #2cb5b0)",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              color: "white",
+                              fontWeight: 700,
+                              fontSize: 15,
+                            }}
+                          >
+                            {r.name.charAt(0).toUpperCase()}
+                          </div>
+                          <span
+                            style={{
+                              fontSize: 15,
+                              fontWeight: 600,
+                              color: "#1a2744",
+                            }}
+                          >
+                            {r.name}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => handleRemoveReceiver(r.id)}
+                          style={{
+                            padding: "5px 14px",
+                            borderRadius: 8,
+                            fontSize: 12,
+                            fontWeight: 600,
+                            border: "1.5px solid #fecaca",
+                            background: "#fef2f2",
+                            color: "#e74c3c",
+                            cursor: "pointer",
+                          }}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* ── Overview ── */}
             {activeTab === "Overview" && (
