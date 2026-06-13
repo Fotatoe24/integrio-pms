@@ -46,7 +46,7 @@ export default function SignupPage() {
         email: email.toLowerCase(),
         password: hashed,
         name,
-        role: "STAFF",
+        role: "owner",
       });
     }
 
