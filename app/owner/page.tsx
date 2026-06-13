@@ -381,8 +381,23 @@ export default function OwnerPage() {
             Owner
           </span>
         </div>
+
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <span style={{ fontSize: 13, color: "#8896a5" }}>{user.name}</span>
+
+          <a
+            href="/change-password"
+            style={{
+              fontSize: 13,
+              color: "#8896a5",
+              border: "1.5px solid #e8edf3",
+              borderRadius: 8,
+              padding: "6px 14px",
+              textDecoration: "none",
+            }}
+          >
+            Change password
+          </a>
           <button
             onClick={logout}
             style={{
