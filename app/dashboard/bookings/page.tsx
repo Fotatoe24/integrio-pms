@@ -110,8 +110,6 @@ export default function BookingsPage() {
   const [conflictWarning, setConflictWarning] = useState("");
   const [nightCleaning, setNightCleaning] = useState(false);
 
-  const currentUser = getCurrentUser();
-
   const [form, setForm] = useState({
     propertyId: "",
     guestName: "",
@@ -247,6 +245,7 @@ export default function BookingsPage() {
   }
 
   function openAdd() {
+    const currentUser = getCurrentUser();
     setForm({
       propertyId: properties[0]?.id || "",
       guestName: "",
