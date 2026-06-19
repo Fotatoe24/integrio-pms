@@ -102,6 +102,9 @@ export default function BookingsPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState("ALL");
+  const [filterProperty, setFilterProperty] = useState("ALL");
+  const [filterPayment, setFilterPayment] = useState("ALL");
+  const [searchQuery, setSearchQuery] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("list");
@@ -472,7 +475,11 @@ export default function BookingsPage() {
 
   async function handleDelete(id: string) {
     if (!confirm("Delete this booking?")) return;
-    await supabase.from("Booking").delete().eq("id", id);
+    const { error } = await supabase.from("Booking").delete().eq("id", id);
+    if (error) {
+      alert("Delete failed: " + error.message);
+      return;
+    }
     loadData();
   }
 
@@ -493,6 +500,16 @@ export default function BookingsPage() {
       .reduce((s, p) => s + Number(p.amount), 0);
     const balance = (form.totalFee || 0) - paid;
     return { paid, balance };
+  }
+
+  function getPaymentState(b: Booking) {
+    const paid = (b.Payment || [])
+      .filter((p) => p.status === "PAID")
+      .reduce((s, p) => s + Number(p.amount), 0);
+    const total = b.totalFee || 0;
+    if (paid <= 0) return "UNPAID";
+    if (paid >= total && total > 0) return "FULLY_PAID";
+    return "PARTIAL";
   }
 
   // Upcoming bookings for selected property (mini calendar in modal)
@@ -531,10 +548,23 @@ export default function BookingsPage() {
     });
   }
 
-  const filtered =
-    filterStatus === "ALL"
-      ? bookings
-      : bookings.filter((b) => b.status === filterStatus);
+  // Combined filtering: status, property/unit, payment state, search
+  const filtered = bookings.filter((b) => {
+    if (filterStatus !== "ALL" && b.status !== filterStatus) return false;
+    if (filterProperty !== "ALL" && b.propertyId !== filterProperty)
+      return false;
+    if (filterPayment !== "ALL" && getPaymentState(b) !== filterPayment)
+      return false;
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      const matchesName = b.guestName.toLowerCase().includes(q);
+      const matchesContact = (b.contactNo || "").toLowerCase().includes(q);
+      const matchesEmail = (b.guestEmail || "").toLowerCase().includes(q);
+      if (!matchesName && !matchesContact && !matchesEmail) return false;
+    }
+    return true;
+  });
+
   const calYear = calendarDate.getFullYear();
   const calMonth = calendarDate.getMonth();
   const calDays = getCalendarDays(calYear, calMonth);
@@ -673,42 +703,181 @@ export default function BookingsPage() {
         </div>
       </div>
 
-      {/* Filter tabs */}
+      {/* Filter bar + status tabs (list view only) */}
       {viewMode === "list" && (
-        <div
-          style={{
-            display: "flex",
-            gap: 8,
-            marginBottom: 24,
-            flexWrap: "wrap",
-          }}
-        >
-          {[
-            "ALL",
-            "PENDING",
-            "CONFIRMED",
-            "CHECKED_IN",
-            "CHECKED_OUT",
-            "CANCELLED",
-          ].map((s) => (
-            <button
-              key={s}
-              onClick={() => setFilterStatus(s)}
+        <>
+          <div
+            style={{
+              display: "flex",
+              gap: 10,
+              marginBottom: 16,
+              flexWrap: "wrap",
+              alignItems: "center",
+            }}
+          >
+            {/* Search */}
+            <div
+              style={{ position: "relative", flex: "1 1 240px", minWidth: 200 }}
+            >
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by name, contact, or email..."
+                style={{
+                  width: "100%",
+                  padding: "9px 14px 9px 34px",
+                  border: "1.5px solid #e8edf3",
+                  borderRadius: 10,
+                  fontSize: 13,
+                  color: "#1a2744",
+                  outline: "none",
+                  background: "white",
+                  fontFamily: "inherit",
+                }}
+              />
+              <span
+                style={{
+                  position: "absolute",
+                  left: 12,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  fontSize: 13,
+                  color: "#8896a5",
+                }}
+              >
+                🔍
+              </span>
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  style={{
+                    position: "absolute",
+                    right: 10,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    color: "#8896a5",
+                    fontSize: 14,
+                  }}
+                >
+                  ×
+                </button>
+              )}
+            </div>
+
+            {/* Unit filter */}
+            <select
+              value={filterProperty}
+              onChange={(e) => setFilterProperty(e.target.value)}
               style={{
-                padding: "6px 16px",
-                borderRadius: 20,
+                padding: "9px 12px",
+                border: "1.5px solid #e8edf3",
+                borderRadius: 10,
                 fontSize: 13,
-                fontWeight: 600,
-                border: filterStatus === s ? "none" : "1.5px solid #e8edf3",
-                background: filterStatus === s ? "#1a2744" : "white",
-                color: filterStatus === s ? "white" : "#8896a5",
+                color: "#1a2744",
+                background: "white",
+                outline: "none",
                 cursor: "pointer",
+                fontFamily: "inherit",
               }}
             >
-              {s === "ALL" ? "All" : s.replace("_", " ")}
-            </button>
-          ))}
-        </div>
+              <option value="ALL">All Units</option>
+              {properties.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+
+            {/* Payment filter */}
+            <select
+              value={filterPayment}
+              onChange={(e) => setFilterPayment(e.target.value)}
+              style={{
+                padding: "9px 12px",
+                border: "1.5px solid #e8edf3",
+                borderRadius: 10,
+                fontSize: 13,
+                color: "#1a2744",
+                background: "white",
+                outline: "none",
+                cursor: "pointer",
+                fontFamily: "inherit",
+              }}
+            >
+              <option value="ALL">All Payments</option>
+              <option value="FULLY_PAID">Fully Paid</option>
+              <option value="PARTIAL">Partial</option>
+              <option value="UNPAID">Unpaid</option>
+            </select>
+
+            {/* Clear filters */}
+            {(filterProperty !== "ALL" ||
+              filterPayment !== "ALL" ||
+              searchQuery ||
+              filterStatus !== "ALL") && (
+              <button
+                onClick={() => {
+                  setFilterProperty("ALL");
+                  setFilterPayment("ALL");
+                  setSearchQuery("");
+                  setFilterStatus("ALL");
+                }}
+                style={{
+                  padding: "9px 16px",
+                  borderRadius: 10,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  border: "1.5px solid #fecaca",
+                  background: "#fef2f2",
+                  color: "#e74c3c",
+                  cursor: "pointer",
+                }}
+              >
+                Clear filters
+              </button>
+            )}
+          </div>
+
+          {/* Status tabs */}
+          <div
+            style={{
+              display: "flex",
+              gap: 8,
+              marginBottom: 24,
+              flexWrap: "wrap",
+            }}
+          >
+            {[
+              "ALL",
+              "PENDING",
+              "CONFIRMED",
+              "CHECKED_IN",
+              "CHECKED_OUT",
+              "CANCELLED",
+            ].map((s) => (
+              <button
+                key={s}
+                onClick={() => setFilterStatus(s)}
+                style={{
+                  padding: "6px 16px",
+                  borderRadius: 20,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  border: filterStatus === s ? "none" : "1.5px solid #e8edf3",
+                  background: filterStatus === s ? "#1a2744" : "white",
+                  color: filterStatus === s ? "white" : "#8896a5",
+                  cursor: "pointer",
+                }}
+              >
+                {s === "ALL" ? "All" : s.replace("_", " ")}
+              </button>
+            ))}
+          </div>
+        </>
       )}
 
       {properties.length === 0 && (
@@ -940,9 +1109,7 @@ export default function BookingsPage() {
             No bookings found
           </h3>
           <p style={{ color: "#8896a5", fontSize: 14 }}>
-            {filterStatus === "ALL"
-              ? "Create your first booking to get started"
-              : `No ${filterStatus.toLowerCase()} bookings`}
+            Try adjusting your filters or search query.
           </p>
         </div>
       ) : (
