@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { getCurrentUser } from "@/lib/auth";
 
 export default function DashboardPage() {
   const [stats, setStats] = useState({
@@ -10,6 +11,7 @@ export default function DashboardPage() {
     guests: 0,
     revenue: 0,
   });
+  const [userName, setUserName] = useState("there");
 
   useEffect(() => {
     document.title = "Dashboard";
@@ -17,20 +19,58 @@ export default function DashboardPage() {
 
   useEffect(() => {
     async function loadStats() {
-      const [{ count: properties }, { count: bookings }, { data: payments }] =
-        await Promise.all([
-          supabase.from("Property").select("*", { count: "exact", head: true }),
-          supabase.from("Booking").select("*", { count: "exact", head: true }),
-          supabase.from("Payment").select("amount").eq("status", "PAID"),
-        ]);
+      const user = getCurrentUser();
+      if (!user) return;
+      setUserName(user.name || "there");
+
+      const ownerId = user.owner_id ?? user.id;
+
+      // Step 1 — get this owner's properties
+      const { data: props } = await supabase
+        .from("Property")
+        .select("id")
+        .eq("owner_id", ownerId);
+
+      const propertyIds = (props ?? []).map((p) => p.id);
+
+      // Step 2 — get bookings only for those properties
+      const { data: bookings } =
+        propertyIds.length > 0
+          ? await supabase
+              .from("Booking")
+              .select("id, guestCount")
+              .in("propertyId", propertyIds)
+          : { data: [] };
+
+      const bookingIds = (bookings ?? []).map((b) => b.id);
+
+      // Step 3 — get payments only for those bookings
+      const { data: payments } =
+        bookingIds.length > 0
+          ? await supabase
+              .from("Payment")
+              .select("amount")
+              .eq("status", "PAID")
+              .in("bookingId", bookingIds)
+          : { data: [] };
 
       const revenue =
         payments?.reduce((sum, p) => sum + Number(p.amount), 0) || 0;
 
+      // Active guests — count bookings currently checked in
+      const { count: activeGuests } =
+        propertyIds.length > 0
+          ? await supabase
+              .from("Booking")
+              .select("*", { count: "exact", head: true })
+              .in("propertyId", propertyIds)
+              .eq("status", "CHECKED_IN")
+          : { count: 0 };
+
       setStats({
-        properties: properties || 0,
-        bookings: bookings || 0,
-        guests: 0,
+        properties: propertyIds.length,
+        bookings: bookings?.length || 0,
+        guests: activeGuests || 0,
         revenue,
       });
     }
@@ -75,7 +115,7 @@ export default function DashboardPage() {
             marginBottom: 4,
           }}
         >
-          Good {getGreeting()}, Admin 👋
+          Good {getGreeting()}, {userName} 👋
         </h1>
         <p style={{ color: "#8896a5", fontSize: 14 }}>
           Here's what's happening with your properties today.
