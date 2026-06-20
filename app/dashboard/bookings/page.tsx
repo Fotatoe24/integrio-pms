@@ -815,6 +815,29 @@ export default function BookingsPage() {
               <option value="PARTIAL">Partial</option>
               <option value="UNPAID">Unpaid</option>
             </select>
+            {/* Platform filter */}
+            <select
+              value={filterPlatform}
+              onChange={(e) => setFilterPlatform(e.target.value)}
+              style={{
+                padding: "9px 12px",
+                border: "1.5px solid #e8edf3",
+                borderRadius: 10,
+                fontSize: 13,
+                color: "#1a2744",
+                background: "white",
+                outline: "none",
+                cursor: "pointer",
+                fontFamily: "inherit",
+              }}
+            >
+              <option value="ALL">All Platforms</option>
+              {PLATFORMS.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
 
             {/* Clear filters */}
             {(filterProperty !== "ALL" ||
@@ -825,6 +848,7 @@ export default function BookingsPage() {
                 onClick={() => {
                   setFilterProperty("ALL");
                   setFilterPayment("ALL");
+                  setFilterPlatform("ALL");
                   setSearchQuery("");
                   setFilterStatus("ALL");
                 }}
