@@ -52,12 +52,22 @@ interface Receiver {
 
 interface Booking {
   id: string;
+  propertyId: string;
   guestName: string;
+  contactNo: string | null;
+  platform: string | null;
   checkIn: string;
   checkOut: string;
+  totalFee: number | null;
   status: string;
   source: string;
   Property?: { name: string };
+  Payment?: Payment[];
+}
+
+interface Property {
+  id: string;
+  name: string;
 }
 
 const ROLES = ["booker", "auditor", "housekeeping"];
@@ -104,6 +114,7 @@ export default function OwnerPage() {
   const [expenseNotes, setExpenseNotes] = useState<ExpenseNote[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [properties, setProperties] = useState<Property[]>([]);
 
   // Invite form
   const [showInviteForm, setShowInviteForm] = useState(false);
@@ -117,6 +128,13 @@ export default function OwnerPage() {
   const [receivers, setReceivers] = useState<Receiver[]>([]);
   const [newReceiverName, setNewReceiverName] = useState("");
   const [addingReceiver, setAddingReceiver] = useState(false);
+
+  // Booking filters
+  const [filterProperty, setFilterProperty] = useState("ALL");
+  const [filterPlatform, setFilterPlatform] = useState("ALL");
+  const [filterBookingStatus, setFilterBookingStatus] = useState("ALL");
+  const [filterPaymentState, setFilterPaymentState] = useState("ALL");
+  const [bookingSearch, setBookingSearch] = useState("");
 
   useEffect(() => {
     document.title = "Owner — Integrio";
@@ -134,17 +152,20 @@ export default function OwnerPage() {
     // Step 1 — get owner's properties first
     const { data: props } = await supabase
       .from("Property")
-      .select("id")
+      .select("id, name")
       .eq("owner_id", ownerId);
 
     const propertyIds = (props ?? []).map((p) => p.id);
+    setProperties(props ?? []);
 
     // Step 2 — get bookings only for those properties
     const { data: book } =
       propertyIds.length > 0
         ? await supabase
             .from("Booking")
-            .select("*, Property(name)")
+            .select(
+              "*, Property(name), Payment(id, type, amount, status, paidAt)"
+            )
             .in("propertyId", propertyIds)
             .order("checkIn", { ascending: false })
         : { data: [] };
@@ -327,6 +348,62 @@ export default function OwnerPage() {
     (b) => b.status === "CHECKED_IN"
   ).length;
 
+  // Collected revenue = sum of DOWNPAYMENT + FULL payments (PAID)
+  const collectedRevenue = bookings.reduce((sum, b) => {
+    const paid = (b.Payment || [])
+      .filter(
+        (p) =>
+          p.status === "PAID" && (p.type === "DOWNPAYMENT" || p.type === "FULL")
+      )
+      .reduce((s, p) => s + Number(p.amount), 0);
+    return sum + paid;
+  }, 0);
+
+  // Expected revenue = sum of totalFee across all bookings (excluding cancelled)
+  const expectedRevenue = bookings
+    .filter((b) => b.status !== "CANCELLED")
+    .reduce((sum, b) => sum + Number(b.totalFee || 0), 0);
+
+  // Payment status per booking
+  function getBookingPaymentState(b: Booking) {
+    const paid = (b.Payment || [])
+      .filter((p) => p.status === "PAID")
+      .reduce((s, p) => s + Number(p.amount), 0);
+    const total = b.totalFee || 0;
+    if (paid <= 0) return "UNPAID";
+    if (paid >= total && total > 0) return "FULLY_PAID";
+    return "PARTIAL";
+  }
+
+  const fullyPaidCount = bookings.filter(
+    (b) =>
+      b.status !== "CANCELLED" && getBookingPaymentState(b) === "FULLY_PAID"
+  ).length;
+  const notFullyPaidCount = bookings.filter(
+    (b) =>
+      b.status !== "CANCELLED" && getBookingPaymentState(b) !== "FULLY_PAID"
+  ).length;
+
+  // Filtered bookings for the Bookings tab
+  const filteredBookings = bookings.filter((b) => {
+    if (filterBookingStatus !== "ALL" && b.status !== filterBookingStatus)
+      return false;
+    if (filterProperty !== "ALL" && b.propertyId !== filterProperty)
+      return false;
+    if (filterPlatform !== "ALL" && b.platform !== filterPlatform) return false;
+    if (
+      filterPaymentState !== "ALL" &&
+      getBookingPaymentState(b) !== filterPaymentState
+    )
+      return false;
+    if (bookingSearch.trim()) {
+      const q = bookingSearch.trim().toLowerCase();
+      const matchesName = b.guestName.toLowerCase().includes(q);
+      const matchesContact = (b.contactNo || "").toLowerCase().includes(q);
+      if (!matchesName && !matchesContact) return false;
+    }
+    return true;
+  });
   const TABS: Tab[] = [
     "Overview",
     "Employees",
@@ -554,6 +631,22 @@ export default function OwnerPage() {
               }}
             >
               {[
+                {
+                  label: "Expected revenue",
+                  value: `₱${expectedRevenue.toLocaleString("en-PH", {
+                    minimumFractionDigits: 2,
+                  })}`,
+                  sub: "Total booking cost (all units)",
+                  top: "#d1ecf1",
+                },
+                {
+                  label: "Collected revenue",
+                  value: `₱${collectedRevenue.toLocaleString("en-PH", {
+                    minimumFractionDigits: 2,
+                  })}`,
+                  sub: "Down payments + full payments",
+                  top: "#d4edda",
+                },
                 {
                   label: "Net income",
                   value: `₱${netIncome.toLocaleString("en-PH", {
@@ -1600,26 +1693,190 @@ export default function OwnerPage() {
               <div
                 style={{ display: "flex", flexDirection: "column", gap: 12 }}
               >
-                {bookings.length === 0 ? (
+                {/* Filter bar */}
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 10,
+                    flexWrap: "wrap",
+                    alignItems: "center",
+                  }}
+                >
                   <div
                     style={{
-                      background: "white",
-                      borderRadius: 16,
-                      padding: 60,
-                      textAlign: "center",
-                      boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+                      position: "relative",
+                      flex: "1 1 220px",
+                      minWidth: 180,
                     }}
                   >
-                    <div style={{ fontSize: 48, marginBottom: 16 }}>📅</div>
-                    <h3 style={{ color: "#1a2744", marginBottom: 8 }}>
-                      No bookings yet
-                    </h3>
-                    <p style={{ color: "#8896a5", fontSize: 14 }}>
-                      Bookings created by the booker will appear here.
-                    </p>
+                    <input
+                      type="text"
+                      value={bookingSearch}
+                      onChange={(e) => setBookingSearch(e.target.value)}
+                      placeholder="Search by name or contact..."
+                      style={{
+                        width: "100%",
+                        padding: "9px 14px 9px 34px",
+                        border: "1.5px solid #e8edf3",
+                        borderRadius: 10,
+                        fontSize: 13,
+                        color: "#1a2744",
+                        outline: "none",
+                        background: "white",
+                        fontFamily: "inherit",
+                      }}
+                    />
+                    <span
+                      style={{
+                        position: "absolute",
+                        left: 12,
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        fontSize: 13,
+                        color: "#8896a5",
+                      }}
+                    >
+                      🔍
+                    </span>
+                  </div>
+
+                  <select
+                    value={filterProperty}
+                    onChange={(e) => setFilterProperty(e.target.value)}
+                    style={{
+                      padding: "9px 12px",
+                      border: "1.5px solid #e8edf3",
+                      borderRadius: 10,
+                      fontSize: 13,
+                      color: "#1a2744",
+                      background: "white",
+                      outline: "none",
+                      cursor: "pointer",
+                      fontFamily: "inherit",
+                    }}
+                  >
+                    <option value="ALL">All Units</option>
+                    {properties.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+
+                  <select
+                    value={filterPlatform}
+                    onChange={(e) => setFilterPlatform(e.target.value)}
+                    style={{
+                      padding: "9px 12px",
+                      border: "1.5px solid #e8edf3",
+                      borderRadius: 10,
+                      fontSize: 13,
+                      color: "#1a2744",
+                      background: "white",
+                      outline: "none",
+                      cursor: "pointer",
+                      fontFamily: "inherit",
+                    }}
+                  >
+                    <option value="ALL">All Platforms</option>
+                    <option value="Facebook">Facebook</option>
+                    <option value="TikTok">TikTok</option>
+                    <option value="Airbnb">Airbnb</option>
+                    <option value="Direct">Direct</option>
+                    <option value="Walk-in">Walk-in</option>
+                  </select>
+
+                  <select
+                    value={filterPaymentState}
+                    onChange={(e) => setFilterPaymentState(e.target.value)}
+                    style={{
+                      padding: "9px 12px",
+                      border: "1.5px solid #e8edf3",
+                      borderRadius: 10,
+                      fontSize: 13,
+                      color: "#1a2744",
+                      background: "white",
+                      outline: "none",
+                      cursor: "pointer",
+                      fontFamily: "inherit",
+                    }}
+                  >
+                    <option value="ALL">All Payments</option>
+                    <option value="FULLY_PAID">Fully Paid</option>
+                    <option value="PARTIAL">Partial</option>
+                    <option value="UNPAID">Unpaid</option>
+                  </select>
+
+                  <select
+                    value={filterBookingStatus}
+                    onChange={(e) => setFilterBookingStatus(e.target.value)}
+                    style={{
+                      padding: "9px 12px",
+                      border: "1.5px solid #e8edf3",
+                      borderRadius: 10,
+                      fontSize: 13,
+                      color: "#1a2744",
+                      background: "white",
+                      outline: "none",
+                      cursor: "pointer",
+                      fontFamily: "inherit",
+                    }}
+                  >
+                    <option value="ALL">All Status</option>
+                    {[
+                      "PENDING",
+                      "CONFIRMED",
+                      "CHECKED_IN",
+                      "CHECKED_OUT",
+                      "CANCELLED",
+                    ].map((s) => (
+                      <option key={s} value={s}>
+                        {s.replace("_", " ")}
+                      </option>
+                    ))}
+                  </select>
+
+                  {(filterProperty !== "ALL" ||
+                    filterPlatform !== "ALL" ||
+                    filterPaymentState !== "ALL" ||
+                    filterBookingStatus !== "ALL" ||
+                    bookingSearch) && (
+                    <button
+                      onClick={() => {
+                        setFilterProperty("ALL");
+                        setFilterPlatform("ALL");
+                        setFilterPaymentState("ALL");
+                        setFilterBookingStatus("ALL");
+                        setBookingSearch("");
+                      }}
+                      style={{
+                        padding: "9px 16px",
+                        borderRadius: 10,
+                        fontSize: 13,
+                        fontWeight: 600,
+                        border: "1.5px solid #fecaca",
+                        background: "#fef2f2",
+                        color: "#e74c3c",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Clear filters
+                    </button>
+                  )}
+                </div>
+
+                {filteredBookings.length === 0 ? (
+                  <div
+                    style={{
+                      textAlign: "center",
+                      padding: 24,
+                      color: "#8896a5",
+                    }}
+                  >
+                    No bookings found.
                   </div>
                 ) : (
-                  bookings.map((b) => (
+                  filteredBookings.map((b) => (
                     <div
                       key={b.id}
                       style={{
