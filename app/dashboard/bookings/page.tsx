@@ -104,6 +104,7 @@ export default function BookingsPage() {
   const [filterStatus, setFilterStatus] = useState("ALL");
   const [filterProperty, setFilterProperty] = useState("ALL");
   const [filterPayment, setFilterPayment] = useState("ALL");
+  const [filterPlatform, setFilterPlatform] = useState("ALL");
   const [searchQuery, setSearchQuery] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -555,6 +556,7 @@ export default function BookingsPage() {
       return false;
     if (filterPayment !== "ALL" && getPaymentState(b) !== filterPayment)
       return false;
+    if (filterPlatform !== "ALL" && b.platform !== filterPlatform) return false;
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
       const matchesName = b.guestName.toLowerCase().includes(q);
