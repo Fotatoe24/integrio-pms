@@ -625,8 +625,8 @@ export default function BookingsPage() {
           </p>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          href="/dashboard/calendar"
           <a
+            href="/dashboard/calendar"
             style={{
               display: "flex",
               alignItems: "center",
