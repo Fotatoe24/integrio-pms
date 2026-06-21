@@ -92,8 +92,6 @@ function isWeekend(dateStr: string) {
   return day === 5 || day === 6 || day === 0; // Fri, Sat, Sun
 }
 
-type ViewMode = "list" | "calendar";
-
 export default function BookingsPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
@@ -108,8 +106,6 @@ export default function BookingsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [viewMode, setViewMode] = useState<ViewMode>("list");
-  const [calendarDate, setCalendarDate] = useState(new Date());
   const [expandedPayments, setExpandedPayments] = useState<string | null>(null);
   const [conflictWarning, setConflictWarning] = useState("");
   const [nightCleaning, setNightCleaning] = useState(false);
@@ -527,28 +523,6 @@ export default function BookingsPage() {
     )
     .slice(0, 5);
 
-  // Calendar
-  function getCalendarDays(year: number, month: number) {
-    const firstDay = new Date(year, month, 1).getDay();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const days: (number | null)[] = Array(firstDay).fill(null);
-    for (let i = 1; i <= daysInMonth; i++) days.push(i);
-    return days;
-  }
-
-  function getBookingsForDay(year: number, month: number, day: number) {
-    const date = new Date(year, month, day);
-    return bookings.filter((b) => {
-      if (b.status === "CANCELLED") return false;
-      const ci = new Date(b.checkIn);
-      ci.setHours(0, 0, 0, 0);
-      const co = new Date(b.checkOut);
-      co.setHours(0, 0, 0, 0);
-      date.setHours(0, 0, 0, 0);
-      return date >= ci && date < co;
-    });
-  }
-
   // Combined filtering: status, property/unit, payment state, search
   const filtered = bookings.filter((b) => {
     if (filterStatus !== "ALL" && b.status !== filterStatus) return false;
@@ -566,10 +540,6 @@ export default function BookingsPage() {
     }
     return true;
   });
-
-  const calYear = calendarDate.getFullYear();
-  const calMonth = calendarDate.getMonth();
-  const calDays = getCalendarDays(calYear, calMonth);
 
   // Computed balance
   const totalPaid =
@@ -655,32 +625,24 @@ export default function BookingsPage() {
           </p>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <div
+          href="/dashboard/calendar"
+          <a
             style={{
               display: "flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "9px 16px",
               border: "1.5px solid #e8edf3",
               borderRadius: 10,
-              overflow: "hidden",
+              fontSize: 13,
+              fontWeight: 600,
+              color: "#1a2744",
+              background: "white",
+              textDecoration: "none",
             }}
           >
-            {(["list", "calendar"] as ViewMode[]).map((v) => (
-              <button
-                key={v}
-                onClick={() => setViewMode(v)}
-                style={{
-                  padding: "8px 16px",
-                  border: "none",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  background: viewMode === v ? "#1a2744" : "white",
-                  color: viewMode === v ? "white" : "#8896a5",
-                  cursor: "pointer",
-                }}
-              >
-                {v === "list" ? "☰ List" : "📅 Calendar"}
-              </button>
-            ))}
-          </div>
+            📅 View Calendar
+          </a>
           <button
             onClick={openAdd}
             disabled={properties.length === 0}
@@ -706,205 +668,203 @@ export default function BookingsPage() {
       </div>
 
       {/* Filter bar + status tabs (list view only) */}
-      {viewMode === "list" && (
-        <>
+      <>
+        <div
+          style={{
+            display: "flex",
+            gap: 10,
+            marginBottom: 16,
+            flexWrap: "wrap",
+            alignItems: "center",
+          }}
+        >
+          {/* Search */}
           <div
-            style={{
-              display: "flex",
-              gap: 10,
-              marginBottom: 16,
-              flexWrap: "wrap",
-              alignItems: "center",
-            }}
+            style={{ position: "relative", flex: "1 1 240px", minWidth: 200 }}
           >
-            {/* Search */}
-            <div
-              style={{ position: "relative", flex: "1 1 240px", minWidth: 200 }}
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by name, contact, or email..."
+              style={{
+                width: "100%",
+                padding: "9px 14px 9px 34px",
+                border: "1.5px solid #e8edf3",
+                borderRadius: 10,
+                fontSize: 13,
+                color: "#1a2744",
+                outline: "none",
+                background: "white",
+                fontFamily: "inherit",
+              }}
+            />
+            <span
+              style={{
+                position: "absolute",
+                left: 12,
+                top: "50%",
+                transform: "translateY(-50%)",
+                fontSize: 13,
+                color: "#8896a5",
+              }}
             >
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by name, contact, or email..."
-                style={{
-                  width: "100%",
-                  padding: "9px 14px 9px 34px",
-                  border: "1.5px solid #e8edf3",
-                  borderRadius: 10,
-                  fontSize: 13,
-                  color: "#1a2744",
-                  outline: "none",
-                  background: "white",
-                  fontFamily: "inherit",
-                }}
-              />
-              <span
+              🔍
+            </span>
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
                 style={{
                   position: "absolute",
-                  left: 12,
+                  right: 10,
                   top: "50%",
                   transform: "translateY(-50%)",
-                  fontSize: 13,
-                  color: "#8896a5",
-                }}
-              >
-                🔍
-              </span>
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery("")}
-                  style={{
-                    position: "absolute",
-                    right: 10,
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    color: "#8896a5",
-                    fontSize: 14,
-                  }}
-                >
-                  ×
-                </button>
-              )}
-            </div>
-
-            {/* Unit filter */}
-            <select
-              value={filterProperty}
-              onChange={(e) => setFilterProperty(e.target.value)}
-              style={{
-                padding: "9px 12px",
-                border: "1.5px solid #e8edf3",
-                borderRadius: 10,
-                fontSize: 13,
-                color: "#1a2744",
-                background: "white",
-                outline: "none",
-                cursor: "pointer",
-                fontFamily: "inherit",
-              }}
-            >
-              <option value="ALL">All Units</option>
-              {properties.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-
-            {/* Payment filter */}
-            <select
-              value={filterPayment}
-              onChange={(e) => setFilterPayment(e.target.value)}
-              style={{
-                padding: "9px 12px",
-                border: "1.5px solid #e8edf3",
-                borderRadius: 10,
-                fontSize: 13,
-                color: "#1a2744",
-                background: "white",
-                outline: "none",
-                cursor: "pointer",
-                fontFamily: "inherit",
-              }}
-            >
-              <option value="ALL">All Payments</option>
-              <option value="FULLY_PAID">Fully Paid</option>
-              <option value="PARTIAL">Partial</option>
-              <option value="UNPAID">Unpaid</option>
-            </select>
-            {/* Platform filter */}
-            <select
-              value={filterPlatform}
-              onChange={(e) => setFilterPlatform(e.target.value)}
-              style={{
-                padding: "9px 12px",
-                border: "1.5px solid #e8edf3",
-                borderRadius: 10,
-                fontSize: 13,
-                color: "#1a2744",
-                background: "white",
-                outline: "none",
-                cursor: "pointer",
-                fontFamily: "inherit",
-              }}
-            >
-              <option value="ALL">All Platforms</option>
-              {PLATFORMS.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </select>
-
-            {/* Clear filters */}
-            {(filterProperty !== "ALL" ||
-              filterPayment !== "ALL" ||
-              searchQuery ||
-              filterStatus !== "ALL") && (
-              <button
-                onClick={() => {
-                  setFilterProperty("ALL");
-                  setFilterPayment("ALL");
-                  setFilterPlatform("ALL");
-                  setSearchQuery("");
-                  setFilterStatus("ALL");
-                }}
-                style={{
-                  padding: "9px 16px",
-                  borderRadius: 10,
-                  fontSize: 13,
-                  fontWeight: 600,
-                  border: "1.5px solid #fecaca",
-                  background: "#fef2f2",
-                  color: "#e74c3c",
+                  background: "none",
+                  border: "none",
                   cursor: "pointer",
+                  color: "#8896a5",
+                  fontSize: 14,
                 }}
               >
-                Clear filters
+                ×
               </button>
             )}
           </div>
 
-          {/* Status tabs */}
-          <div
+          {/* Unit filter */}
+          <select
+            value={filterProperty}
+            onChange={(e) => setFilterProperty(e.target.value)}
             style={{
-              display: "flex",
-              gap: 8,
-              marginBottom: 24,
-              flexWrap: "wrap",
+              padding: "9px 12px",
+              border: "1.5px solid #e8edf3",
+              borderRadius: 10,
+              fontSize: 13,
+              color: "#1a2744",
+              background: "white",
+              outline: "none",
+              cursor: "pointer",
+              fontFamily: "inherit",
             }}
           >
-            {[
-              "ALL",
-              "PENDING",
-              "CONFIRMED",
-              "CHECKED_IN",
-              "CHECKED_OUT",
-              "CANCELLED",
-            ].map((s) => (
-              <button
-                key={s}
-                onClick={() => setFilterStatus(s)}
-                style={{
-                  padding: "6px 16px",
-                  borderRadius: 20,
-                  fontSize: 13,
-                  fontWeight: 600,
-                  border: filterStatus === s ? "none" : "1.5px solid #e8edf3",
-                  background: filterStatus === s ? "#1a2744" : "white",
-                  color: filterStatus === s ? "white" : "#8896a5",
-                  cursor: "pointer",
-                }}
-              >
-                {s === "ALL" ? "All" : s.replace("_", " ")}
-              </button>
+            <option value="ALL">All Units</option>
+            {properties.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
             ))}
-          </div>
-        </>
-      )}
+          </select>
+
+          {/* Payment filter */}
+          <select
+            value={filterPayment}
+            onChange={(e) => setFilterPayment(e.target.value)}
+            style={{
+              padding: "9px 12px",
+              border: "1.5px solid #e8edf3",
+              borderRadius: 10,
+              fontSize: 13,
+              color: "#1a2744",
+              background: "white",
+              outline: "none",
+              cursor: "pointer",
+              fontFamily: "inherit",
+            }}
+          >
+            <option value="ALL">All Payments</option>
+            <option value="FULLY_PAID">Fully Paid</option>
+            <option value="PARTIAL">Partial</option>
+            <option value="UNPAID">Unpaid</option>
+          </select>
+          {/* Platform filter */}
+          <select
+            value={filterPlatform}
+            onChange={(e) => setFilterPlatform(e.target.value)}
+            style={{
+              padding: "9px 12px",
+              border: "1.5px solid #e8edf3",
+              borderRadius: 10,
+              fontSize: 13,
+              color: "#1a2744",
+              background: "white",
+              outline: "none",
+              cursor: "pointer",
+              fontFamily: "inherit",
+            }}
+          >
+            <option value="ALL">All Platforms</option>
+            {PLATFORMS.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </select>
+
+          {/* Clear filters */}
+          {(filterProperty !== "ALL" ||
+            filterPayment !== "ALL" ||
+            searchQuery ||
+            filterStatus !== "ALL") && (
+            <button
+              onClick={() => {
+                setFilterProperty("ALL");
+                setFilterPayment("ALL");
+                setFilterPlatform("ALL");
+                setSearchQuery("");
+                setFilterStatus("ALL");
+              }}
+              style={{
+                padding: "9px 16px",
+                borderRadius: 10,
+                fontSize: 13,
+                fontWeight: 600,
+                border: "1.5px solid #fecaca",
+                background: "#fef2f2",
+                color: "#e74c3c",
+                cursor: "pointer",
+              }}
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
+
+        {/* Status tabs */}
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            marginBottom: 24,
+            flexWrap: "wrap",
+          }}
+        >
+          {[
+            "ALL",
+            "PENDING",
+            "CONFIRMED",
+            "CHECKED_IN",
+            "CHECKED_OUT",
+            "CANCELLED",
+          ].map((s) => (
+            <button
+              key={s}
+              onClick={() => setFilterStatus(s)}
+              style={{
+                padding: "6px 16px",
+                borderRadius: 20,
+                fontSize: 13,
+                fontWeight: 600,
+                border: filterStatus === s ? "none" : "1.5px solid #e8edf3",
+                background: filterStatus === s ? "#1a2744" : "white",
+                color: filterStatus === s ? "white" : "#8896a5",
+                cursor: "pointer",
+              }}
+            >
+              {s === "ALL" ? "All" : s.replace("_", " ")}
+            </button>
+          ))}
+        </div>
+      </>
 
       {properties.length === 0 && (
         <div
@@ -931,194 +891,6 @@ export default function BookingsPage() {
       {loading ? (
         <div style={{ textAlign: "center", padding: 60, color: "#8896a5" }}>
           Loading bookings...
-        </div>
-      ) : viewMode === "calendar" ? (
-        <div
-          style={{
-            background: "white",
-            borderRadius: 16,
-            boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
-            overflow: "hidden",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: "20px 24px",
-              borderBottom: "1px solid #e8edf3",
-            }}
-          >
-            <button
-              onClick={() =>
-                setCalendarDate(new Date(calYear, calMonth - 1, 1))
-              }
-              style={{
-                background: "none",
-                border: "1.5px solid #e8edf3",
-                borderRadius: 8,
-                padding: "6px 14px",
-                cursor: "pointer",
-                fontSize: 14,
-                color: "#1a2744",
-                fontWeight: 600,
-              }}
-            >
-              ← Prev
-            </button>
-            <span style={{ fontSize: 16, fontWeight: 700, color: "#1a2744" }}>
-              {calendarDate.toLocaleDateString("en-PH", {
-                month: "long",
-                year: "numeric",
-              })}
-            </span>
-            <button
-              onClick={() =>
-                setCalendarDate(new Date(calYear, calMonth + 1, 1))
-              }
-              style={{
-                background: "none",
-                border: "1.5px solid #e8edf3",
-                borderRadius: 8,
-                padding: "6px 14px",
-                cursor: "pointer",
-                fontSize: 14,
-                color: "#1a2744",
-                fontWeight: 600,
-              }}
-            >
-              Next →
-            </button>
-          </div>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(7, 1fr)",
-              borderBottom: "1px solid #e8edf3",
-            }}
-          >
-            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
-              <div
-                key={d}
-                style={{
-                  padding: "10px 0",
-                  textAlign: "center",
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: "#8896a5",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.06em",
-                }}
-              >
-                {d}
-              </div>
-            ))}
-          </div>
-          <div
-            style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)" }}
-          >
-            {calDays.map((day, i) => {
-              const dayBookings = day
-                ? getBookingsForDay(calYear, calMonth, day)
-                : [];
-              const isToday =
-                day !== null &&
-                new Date().getDate() === day &&
-                new Date().getMonth() === calMonth &&
-                new Date().getFullYear() === calYear;
-              return (
-                <div
-                  key={i}
-                  style={{
-                    minHeight: 90,
-                    padding: "8px",
-                    borderRight: "1px solid #f0f4f8",
-                    borderBottom: "1px solid #f0f4f8",
-                    background:
-                      day === null ? "#fafafa" : isToday ? "#f0f9ff" : "white",
-                  }}
-                >
-                  {day !== null && (
-                    <>
-                      <div
-                        style={{
-                          fontSize: 13,
-                          fontWeight: isToday ? 700 : 500,
-                          color: isToday ? "#2cb5b0" : "#1a2744",
-                          marginBottom: 4,
-                        }}
-                      >
-                        {day}
-                      </div>
-                      {dayBookings.slice(0, 2).map((b) => (
-                        <div
-                          key={b.id}
-                          title={`${b.guestName} · ${b.Property?.name}`}
-                          style={{
-                            fontSize: 10,
-                            fontWeight: 600,
-                            padding: "2px 6px",
-                            borderRadius: 4,
-                            marginBottom: 2,
-                            background:
-                              STATUS_COLORS[b.status]?.bg || "#e8edf3",
-                            color: STATUS_COLORS[b.status]?.color || "#383d41",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {b.guestName.split(" ")[0]}
-                        </div>
-                      ))}
-                      {dayBookings.length > 2 && (
-                        <div
-                          style={{
-                            fontSize: 10,
-                            color: "#8896a5",
-                            fontWeight: 600,
-                          }}
-                        >
-                          +{dayBookings.length - 2} more
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          <div
-            style={{
-              display: "flex",
-              gap: 16,
-              padding: "16px 24px",
-              borderTop: "1px solid #e8edf3",
-              flexWrap: "wrap",
-            }}
-          >
-            {Object.entries(STATUS_COLORS).map(([status, colors]) => (
-              <div
-                key={status}
-                style={{ display: "flex", alignItems: "center", gap: 6 }}
-              >
-                <div
-                  style={{
-                    width: 10,
-                    height: 10,
-                    borderRadius: 2,
-                    background: colors.bg,
-                  }}
-                />
-                <span
-                  style={{ fontSize: 11, color: "#8896a5", fontWeight: 600 }}
-                >
-                  {status.replace("_", " ")}
-                </span>
-              </div>
-            ))}
-          </div>
         </div>
       ) : filtered.length === 0 ? (
         <div

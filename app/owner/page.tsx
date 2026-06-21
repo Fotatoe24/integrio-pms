@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { requireRole, IntegrioUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
+import UnitCalendar from "@/components/ui/UnitCalendar";
 
 type Tab =
   | "Overview"
@@ -11,7 +12,8 @@ type Tab =
   | "Receivers"
   | "Expenses"
   | "Payments"
-  | "Bookings";
+  | "Bookings"
+  | "Calendar";
 
 interface Employee {
   id: string;
@@ -58,6 +60,9 @@ interface Booking {
   platform: string | null;
   checkIn: string;
   checkOut: string;
+  checkInTime: string | null;
+  checkOutTime: string | null;
+  stayType: string | null;
   totalFee: number | null;
   status: string;
   source: string;
@@ -411,6 +416,7 @@ export default function OwnerPage() {
     "Expenses",
     "Payments",
     "Bookings",
+    "Calendar",
   ];
 
   const inputStyle: React.CSSProperties = {
@@ -1995,6 +2001,10 @@ export default function OwnerPage() {
                   ))
                 )}
               </div>
+            )}
+            {/* ── Calendar ── */}
+            {activeTab === "Calendar" && (
+              <UnitCalendar properties={properties} bookings={bookings} />
             )}
           </>
         )}
