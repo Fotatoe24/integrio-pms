@@ -84,18 +84,18 @@ export default function LoginPage() {
       }}
     >
       {/* Logo */}
-      <div className="flex flex-col items-center mb-4 select-none">
+      <div className="flex flex-col items-center mb-2 select-none">
         <img
           src="./darktrans.png"
           alt="Integrio"
-          className="w-[260px] sm:w-[300px] h-auto"
+          className="w-65 sm:w-75 h-auto"
           style={{ filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.25))" }}
         />
       </div>
 
       {/* Card */}
-      <div className="w-full max-w-[420px] bg-white rounded-2xl shadow-2xl px-8 sm:px-9 py-9">
-        <h1 className="text-2xl sm:text-[26px] font-bold text-center text-[#1e3a5f] mb-7">
+      <div className="w-full max-w-105 bg-white rounded-2xl shadow-2xl px-8 sm:px-9 py-9">
+        <h1 className="text-3xl sm:text-[26px] font-bold text-center text-[#1e3a5f] mb-7">
           Login
         </h1>
 
