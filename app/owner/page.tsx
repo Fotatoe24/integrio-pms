@@ -389,6 +389,21 @@ export default function OwnerPage() {
       b.status !== "CANCELLED" && getBookingPaymentState(b) !== "FULLY_PAID"
   ).length;
 
+  // Bookings whose check-in falls in the current calendar month
+  const now = new Date();
+  const bookingsThisMonth = bookings.filter((b) => {
+    const d = new Date(b.checkIn);
+    return (
+      d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
+    );
+  }).length;
+
+  // % of expected revenue collected so far
+  const collectionPct =
+    expectedRevenue > 0
+      ? Math.min(100, Math.round((collectedRevenue / expectedRevenue) * 100))
+      : 0;
+
   // Filtered bookings for the Bookings tab
   const filteredBookings = bookings.filter((b) => {
     if (filterBookingStatus !== "ALL" && b.status !== filterBookingStatus)
@@ -422,20 +437,20 @@ export default function OwnerPage() {
   const inputStyle: React.CSSProperties = {
     width: "100%",
     padding: "11px 14px",
-    border: "1.5px solid #e8edf3",
+    border: "1.5px solid #23232b",
     borderRadius: 10,
     fontSize: 14,
-    color: "#1a2744",
+    color: "#f5f5f7",
     outline: "none",
     fontFamily: "inherit",
-    background: "white",
+    background: "#15151a",
   };
 
   const labelStyle: React.CSSProperties = {
     display: "block",
     fontSize: 12,
     fontWeight: 600,
-    color: "#8896a5",
+    color: "#9a9aa5",
     textTransform: "uppercase",
     letterSpacing: "0.06em",
     marginBottom: 8,
@@ -447,15 +462,15 @@ export default function OwnerPage() {
     <div
       style={{
         minHeight: "100vh",
-        background: "#f0f4f8",
+        background: "#0a0a0c",
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
       }}
     >
       {/* Header */}
       <div
         style={{
-          background: "white",
-          borderBottom: "1px solid #e8edf3",
+          background: "#0a0a0c",
+          borderBottom: "1px solid #1c1c22",
           padding: "0 32px",
           height: 64,
           display: "flex",
@@ -517,15 +532,16 @@ export default function OwnerPage() {
               />
             </svg>
           </div>
-          <span style={{ fontSize: 16, fontWeight: 700, color: "#1a2744" }}>
+          <span style={{ fontSize: 16, fontWeight: 700, color: "#f5f5f7" }}>
             Integrio
           </span>
           <span
             style={{
               fontSize: 12,
               fontWeight: 600,
-              background: "#e8d5f5",
-              color: "#5a2d82",
+              background: "#1c1c22",
+              color: "#c7c7cf",
+              border: "1px solid #2a2a33",
               borderRadius: 20,
               padding: "3px 10px",
             }}
@@ -535,14 +551,14 @@ export default function OwnerPage() {
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <span style={{ fontSize: 13, color: "#8896a5" }}>{user.name}</span>
+          <span style={{ fontSize: 13, color: "#9a9aa5" }}>{user.name}</span>
 
           <a
             href="/change-password"
             style={{
               fontSize: 13,
-              color: "#8896a5",
-              border: "1.5px solid #e8edf3",
+              color: "#9a9aa5",
+              border: "1.5px solid #23232b",
               borderRadius: 8,
               padding: "6px 14px",
               textDecoration: "none",
@@ -554,9 +570,9 @@ export default function OwnerPage() {
             onClick={logout}
             style={{
               fontSize: 13,
-              color: "#8896a5",
+              color: "#9a9aa5",
               background: "none",
-              border: "1.5px solid #e8edf3",
+              border: "1.5px solid #23232b",
               borderRadius: 8,
               padding: "6px 14px",
               cursor: "pointer",
@@ -584,13 +600,13 @@ export default function OwnerPage() {
               style={{
                 fontSize: 24,
                 fontWeight: 700,
-                color: "#1a2744",
+                color: "#f5f5f7",
                 marginBottom: 4,
               }}
             >
               Owner Dashboard
             </h1>
-            <p style={{ color: "#8896a5", fontSize: 14 }}>
+            <p style={{ color: "#9a9aa5", fontSize: 14 }}>
               Full visibility across all operations
             </p>
           </div>
@@ -622,121 +638,228 @@ export default function OwnerPage() {
         </div>
 
         {loading ? (
-          <div style={{ textAlign: "center", padding: 80, color: "#8896a5" }}>
+          <div style={{ textAlign: "center", padding: 80, color: "#9a9aa5" }}>
             Loading...
           </div>
         ) : (
           <>
-            {/* Stat cards */}
+            {/* Net income hero + collection progress + quick stats */}
             <div
               style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+                display: "flex",
+                flexDirection: "column",
                 gap: 16,
                 marginBottom: 28,
               }}
             >
-              {[
-                {
-                  label: "Expected revenue",
-                  value: `₱${expectedRevenue.toLocaleString("en-PH", {
-                    minimumFractionDigits: 2,
-                  })}`,
-                  sub: "Total booking cost (all units)",
-                  top: "#d1ecf1",
-                },
-                {
-                  label: "Collected revenue",
-                  value: `₱${collectedRevenue.toLocaleString("en-PH", {
-                    minimumFractionDigits: 2,
-                  })}`,
-                  sub: "Down payments + full payments",
-                  top: "#d4edda",
-                },
-                {
-                  label: "Net income",
-                  value: `₱${netIncome.toLocaleString("en-PH", {
-                    minimumFractionDigits: 2,
-                  })}`,
-                  sub: "Income minus expenses",
-                  top: netIncome >= 0 ? "#d4edda" : "#f8d7da",
-                },
-                {
-                  label: "Total income",
-                  value: `₱${totalIncome.toLocaleString("en-PH", {
-                    minimumFractionDigits: 2,
-                  })}`,
-                  sub: "Paid payments",
-                  top: "#d1ecf1",
-                },
-                {
-                  label: "Total expenses",
-                  value: `₱${totalExpenses.toLocaleString("en-PH", {
-                    minimumFractionDigits: 2,
-                  })}`,
-                  sub: `${expenseNotes.length} entries`,
-                  top: "#f8d7da",
-                },
-                {
-                  label: "Pending collection",
-                  value: `₱${pendingCollection.toLocaleString("en-PH", {
-                    minimumFractionDigits: 2,
-                  })}`,
-                  sub: "Unpaid payments",
-                  top: "#fff3cd",
-                },
-                {
-                  label: "Active bookings",
-                  value: String(activeBookings),
-                  sub: "Currently checked in",
-                  top: "#d4edda",
-                },
-                {
-                  label: "Team size",
-                  value: String(
-                    employees.filter((e) => e.status !== "revoked").length
-                  ),
-                  sub: "Active employees",
-                  top: "#e8d5f5",
-                },
-              ].map((stat) => (
-                <div
-                  key={stat.label}
-                  style={{
-                    background: "white",
-                    borderRadius: 16,
-                    boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
-                    padding: "20px 24px",
-                    borderTop: `3px solid ${stat.top}`,
-                  }}
-                >
+              {/* Net income hero */}
+              <div
+                style={{
+                  background: "#15151a",
+                  border: "1px solid #1f1f26",
+                  borderRadius: 16,
+                  padding: "28px 28px",
+                  display: "flex",
+                  alignItems: "flex-start",
+                  justifyContent: "space-between",
+                  flexWrap: "wrap",
+                  gap: 24,
+                }}
+              >
+                <div>
                   <div
                     style={{
                       fontSize: 11,
                       fontWeight: 600,
-                      color: "#8896a5",
+                      color: "#7a7a82",
                       textTransform: "uppercase",
                       letterSpacing: "0.06em",
-                      marginBottom: 8,
+                      marginBottom: 12,
                     }}
                   >
-                    {stat.label}
+                    Net income
                   </div>
                   <div
                     style={{
-                      fontSize: 20,
+                      fontSize: 36,
                       fontWeight: 700,
-                      color: "#1a2744",
-                      marginBottom: 4,
+                      color: "#f5f5f7",
+                      marginBottom: 6,
+                      lineHeight: 1.1,
                     }}
                   >
-                    {stat.value}
+                    ₱
+                    {netIncome.toLocaleString("en-PH", {
+                      minimumFractionDigits: 2,
+                    })}
                   </div>
-                  <div style={{ fontSize: 12, color: "#8896a5" }}>
-                    {stat.sub}
+                  <div style={{ fontSize: 13, color: "#8b8b95" }}>
+                    Income minus expenses
                   </div>
                 </div>
-              ))}
+                <div style={{ display: "flex", gap: 32, flexWrap: "wrap" }}>
+                  {[
+                    { label: "Collected", value: collectedRevenue },
+                    { label: "Expected", value: expectedRevenue },
+                    { label: "Expenses", value: totalExpenses },
+                  ].map((item) => (
+                    <div key={item.label} style={{ textAlign: "right" }}>
+                      <div
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 600,
+                          color: "#7a7a82",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.06em",
+                          marginBottom: 8,
+                        }}
+                      >
+                        {item.label}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 17,
+                          fontWeight: 700,
+                          color: "#f5f5f7",
+                        }}
+                      >
+                        ₱{item.value.toLocaleString("en-PH")}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Collection progress */}
+              <div
+                style={{
+                  background: "#15151a",
+                  border: "1px solid #1f1f26",
+                  borderRadius: 16,
+                  padding: "22px 28px",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    marginBottom: 14,
+                  }}
+                >
+                  <span
+                    style={{ fontSize: 14, fontWeight: 600, color: "#d4d4db" }}
+                  >
+                    Collection progress
+                  </span>
+                  <span
+                    style={{ fontSize: 13, fontWeight: 700, color: "#f5f5f7" }}
+                  >
+                    {collectionPct}% collected
+                  </span>
+                </div>
+                <div
+                  style={{
+                    height: 8,
+                    borderRadius: 8,
+                    background: "#23232b",
+                    overflow: "hidden",
+                  }}
+                >
+                  <div
+                    style={{
+                      height: "100%",
+                      width: `${collectionPct}%`,
+                      background: "#a3e635",
+                      borderRadius: 8,
+                      transition: "width 0.3s",
+                    }}
+                  />
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    marginTop: 10,
+                    fontSize: 12,
+                    color: "#8b8b95",
+                  }}
+                >
+                  <span>
+                    ₱
+                    {pendingCollection.toLocaleString("en-PH", {
+                      minimumFractionDigits: 2,
+                    })}{" "}
+                    pending
+                  </span>
+                  <span>
+                    ₱
+                    {expectedRevenue.toLocaleString("en-PH", {
+                      minimumFractionDigits: 2,
+                    })}{" "}
+                    expected total
+                  </span>
+                </div>
+              </div>
+
+              {/* Quick stats */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+                  gap: 16,
+                }}
+              >
+                {[
+                  {
+                    icon: "📋",
+                    value: String(activeBookings),
+                    label: "Active bookings",
+                  },
+                  {
+                    icon: "👥",
+                    value: String(
+                      employees.filter((e) => e.status !== "revoked").length
+                    ),
+                    label: "Team size",
+                  },
+                  {
+                    icon: "📅",
+                    value: String(bookingsThisMonth),
+                    label: "Bookings this month",
+                  },
+                ].map((s) => (
+                  <div
+                    key={s.label}
+                    style={{
+                      background: "#15151a",
+                      border: "1px solid #1f1f26",
+                      borderRadius: 16,
+                      padding: "18px 20px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 14,
+                    }}
+                  >
+                    <div style={{ fontSize: 20 }}>{s.icon}</div>
+                    <div>
+                      <div
+                        style={{
+                          fontSize: 22,
+                          fontWeight: 700,
+                          color: "#f5f5f7",
+                          lineHeight: 1.1,
+                        }}
+                      >
+                        {s.value}
+                      </div>
+                      <div style={{ fontSize: 12, color: "#8b8b95" }}>
+                        {s.label}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
 
             {/* Tabs */}
@@ -757,9 +880,9 @@ export default function OwnerPage() {
                     borderRadius: 20,
                     fontSize: 13,
                     fontWeight: 600,
-                    border: activeTab === tab ? "none" : "1.5px solid #e8edf3",
-                    background: activeTab === tab ? "#1a2744" : "white",
-                    color: activeTab === tab ? "white" : "#8896a5",
+                    border: activeTab === tab ? "none" : "1.5px solid #23232b",
+                    background: activeTab === tab ? "#f5f5f7" : "#15151a",
+                    color: activeTab === tab ? "#0a0a0c" : "#9a9aa5",
                     cursor: "pointer",
                     transition: "all 0.2s",
                   }}
@@ -776,9 +899,10 @@ export default function OwnerPage() {
                 {/* Add receiver */}
                 <div
                   style={{
-                    background: "white",
+                    background: "#15151a",
                     borderRadius: 16,
-                    boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+                    boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+                    border: "1px solid #1f1f26",
                     padding: "24px",
                   }}
                 >
@@ -786,7 +910,7 @@ export default function OwnerPage() {
                     style={{
                       fontSize: 12,
                       fontWeight: 600,
-                      color: "#8896a5",
+                      color: "#9a9aa5",
                       textTransform: "uppercase",
                       letterSpacing: "0.06em",
                       marginBottom: 14,
@@ -806,10 +930,10 @@ export default function OwnerPage() {
                       style={{
                         flex: 1,
                         padding: "11px 14px",
-                        border: "1.5px solid #e8edf3",
+                        border: "1.5px solid #23232b",
                         borderRadius: 10,
                         fontSize: 14,
-                        color: "#1a2744",
+                        color: "#f5f5f7",
                         outline: "none",
                         fontFamily: "inherit",
                       }}
@@ -817,7 +941,7 @@ export default function OwnerPage() {
                         (e.currentTarget.style.borderColor = "#2cb5b0")
                       }
                       onBlur={(e) =>
-                        (e.currentTarget.style.borderColor = "#e8edf3")
+                        (e.currentTarget.style.borderColor = "#23232b")
                       }
                     />
                     <button
@@ -826,7 +950,7 @@ export default function OwnerPage() {
                       style={{
                         background:
                           addingReceiver || !newReceiverName.trim()
-                            ? "#e8edf3"
+                            ? "#23232b"
                             : "linear-gradient(135deg, #1a2744, #2cb5b0)",
                         color:
                           addingReceiver || !newReceiverName.trim()
@@ -856,18 +980,19 @@ export default function OwnerPage() {
                 {receivers.length === 0 ? (
                   <div
                     style={{
-                      background: "white",
+                      background: "#15151a",
                       borderRadius: 16,
                       padding: 60,
                       textAlign: "center",
-                      boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+                      boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+                      border: "1px solid #1f1f26",
                     }}
                   >
                     <div style={{ fontSize: 48, marginBottom: 16 }}>💰</div>
-                    <h3 style={{ color: "#1a2744", marginBottom: 8 }}>
+                    <h3 style={{ color: "#f5f5f7", marginBottom: 8 }}>
                       No receivers yet
                     </h3>
-                    <p style={{ color: "#8896a5", fontSize: 14 }}>
+                    <p style={{ color: "#9a9aa5", fontSize: 14 }}>
                       Add the people who collect payments.
                     </p>
                   </div>
@@ -883,9 +1008,10 @@ export default function OwnerPage() {
                       <div
                         key={r.id}
                         style={{
-                          background: "white",
+                          background: "#15151a",
                           borderRadius: 14,
-                          boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+                          boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+                          border: "1px solid #1f1f26",
                           padding: "16px 24px",
                           display: "flex",
                           alignItems: "center",
@@ -920,7 +1046,7 @@ export default function OwnerPage() {
                             style={{
                               fontSize: 15,
                               fontWeight: 600,
-                              color: "#1a2744",
+                              color: "#f5f5f7",
                             }}
                           >
                             {r.name}
@@ -960,9 +1086,10 @@ export default function OwnerPage() {
                 {/* Recent bookings */}
                 <div
                   style={{
-                    background: "white",
+                    background: "#15151a",
                     borderRadius: 16,
-                    boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+                    boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+                    border: "1px solid #1f1f26",
                     padding: "20px 24px",
                   }}
                 >
@@ -970,7 +1097,7 @@ export default function OwnerPage() {
                     style={{
                       fontSize: 13,
                       fontWeight: 700,
-                      color: "#1a2744",
+                      color: "#f5f5f7",
                       marginBottom: 16,
                     }}
                   >
@@ -984,7 +1111,7 @@ export default function OwnerPage() {
                         alignItems: "center",
                         justifyContent: "space-between",
                         padding: "10px 0",
-                        borderBottom: "1px solid #f0f4f8",
+                        borderBottom: "1px solid #0a0a0c",
                       }}
                     >
                       <div>
@@ -992,12 +1119,12 @@ export default function OwnerPage() {
                           style={{
                             fontSize: 13,
                             fontWeight: 600,
-                            color: "#1a2744",
+                            color: "#f5f5f7",
                           }}
                         >
                           {b.guestName}
                         </div>
-                        <div style={{ fontSize: 11, color: "#8896a5" }}>
+                        <div style={{ fontSize: 11, color: "#9a9aa5" }}>
                           {b.Property?.name} · {formatDate(b.checkIn)}
                         </div>
                       </div>
@@ -1017,7 +1144,7 @@ export default function OwnerPage() {
                     </div>
                   ))}
                   {bookings.length === 0 && (
-                    <p style={{ fontSize: 13, color: "#8896a5" }}>
+                    <p style={{ fontSize: 13, color: "#9a9aa5" }}>
                       No bookings yet.
                     </p>
                   )}
@@ -1026,9 +1153,10 @@ export default function OwnerPage() {
                 {/* Recent expenses */}
                 <div
                   style={{
-                    background: "white",
+                    background: "#15151a",
                     borderRadius: 16,
-                    boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+                    boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+                    border: "1px solid #1f1f26",
                     padding: "20px 24px",
                   }}
                 >
@@ -1036,7 +1164,7 @@ export default function OwnerPage() {
                     style={{
                       fontSize: 13,
                       fontWeight: 700,
-                      color: "#1a2744",
+                      color: "#f5f5f7",
                       marginBottom: 16,
                     }}
                   >
@@ -1050,7 +1178,7 @@ export default function OwnerPage() {
                         alignItems: "center",
                         justifyContent: "space-between",
                         padding: "10px 0",
-                        borderBottom: "1px solid #f0f4f8",
+                        borderBottom: "1px solid #0a0a0c",
                       }}
                     >
                       <div style={{ flex: 1, minWidth: 0 }}>
@@ -1067,7 +1195,7 @@ export default function OwnerPage() {
                         >
                           {n.category}
                         </span>
-                        <span style={{ fontSize: 13, color: "#1a2744" }}>
+                        <span style={{ fontSize: 13, color: "#f5f5f7" }}>
                           {n.content.slice(0, 35)}
                           {n.content.length > 35 ? "…" : ""}
                         </span>
@@ -1076,7 +1204,7 @@ export default function OwnerPage() {
                         style={{
                           fontSize: 13,
                           fontWeight: 600,
-                          color: "#1a2744",
+                          color: "#f5f5f7",
                           whiteSpace: "nowrap",
                           marginLeft: 12,
                         }}
@@ -1089,7 +1217,7 @@ export default function OwnerPage() {
                     </div>
                   ))}
                   {expenseNotes.length === 0 && (
-                    <p style={{ fontSize: 13, color: "#8896a5" }}>
+                    <p style={{ fontSize: 13, color: "#9a9aa5" }}>
                       No expenses yet.
                     </p>
                   )}
@@ -1098,9 +1226,10 @@ export default function OwnerPage() {
                 {/* Recent payments */}
                 <div
                   style={{
-                    background: "white",
+                    background: "#15151a",
                     borderRadius: 16,
-                    boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+                    boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+                    border: "1px solid #1f1f26",
                     padding: "20px 24px",
                   }}
                 >
@@ -1108,7 +1237,7 @@ export default function OwnerPage() {
                     style={{
                       fontSize: 13,
                       fontWeight: 700,
-                      color: "#1a2744",
+                      color: "#f5f5f7",
                       marginBottom: 16,
                     }}
                   >
@@ -1122,7 +1251,7 @@ export default function OwnerPage() {
                         alignItems: "center",
                         justifyContent: "space-between",
                         padding: "10px 0",
-                        borderBottom: "1px solid #f0f4f8",
+                        borderBottom: "1px solid #0a0a0c",
                       }}
                     >
                       <div>
@@ -1130,12 +1259,12 @@ export default function OwnerPage() {
                           style={{
                             fontSize: 13,
                             fontWeight: 600,
-                            color: "#1a2744",
+                            color: "#f5f5f7",
                           }}
                         >
                           {p.Booking?.guestName || "—"}
                         </div>
-                        <div style={{ fontSize: 11, color: "#8896a5" }}>
+                        <div style={{ fontSize: 11, color: "#9a9aa5" }}>
                           {p.type} ·{" "}
                           {p.paidAt ? formatDate(p.paidAt) : "Unpaid"}
                         </div>
@@ -1145,7 +1274,7 @@ export default function OwnerPage() {
                           style={{
                             fontSize: 13,
                             fontWeight: 600,
-                            color: "#1a2744",
+                            color: "#f5f5f7",
                           }}
                         >
                           ₱
@@ -1169,7 +1298,7 @@ export default function OwnerPage() {
                     </div>
                   ))}
                   {payments.length === 0 && (
-                    <p style={{ fontSize: 13, color: "#8896a5" }}>
+                    <p style={{ fontSize: 13, color: "#9a9aa5" }}>
                       No payments yet.
                     </p>
                   )}
@@ -1178,9 +1307,10 @@ export default function OwnerPage() {
                 {/* Team */}
                 <div
                   style={{
-                    background: "white",
+                    background: "#15151a",
                     borderRadius: 16,
-                    boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+                    boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+                    border: "1px solid #1f1f26",
                     padding: "20px 24px",
                   }}
                 >
@@ -1188,14 +1318,14 @@ export default function OwnerPage() {
                     style={{
                       fontSize: 13,
                       fontWeight: 700,
-                      color: "#1a2744",
+                      color: "#f5f5f7",
                       marginBottom: 16,
                     }}
                   >
                     Team
                   </div>
                   {employees.length === 0 ? (
-                    <p style={{ fontSize: 13, color: "#8896a5" }}>
+                    <p style={{ fontSize: 13, color: "#9a9aa5" }}>
                       No employees yet. Go to the Employees tab to invite
                       someone.
                     </p>
@@ -1208,7 +1338,7 @@ export default function OwnerPage() {
                           alignItems: "center",
                           justifyContent: "space-between",
                           padding: "10px 0",
-                          borderBottom: "1px solid #f0f4f8",
+                          borderBottom: "1px solid #0a0a0c",
                         }}
                       >
                         <div
@@ -1240,12 +1370,12 @@ export default function OwnerPage() {
                               style={{
                                 fontSize: 13,
                                 fontWeight: 600,
-                                color: "#1a2744",
+                                color: "#f5f5f7",
                               }}
                             >
                               {e.name}
                             </div>
-                            <div style={{ fontSize: 11, color: "#8896a5" }}>
+                            <div style={{ fontSize: 11, color: "#9a9aa5" }}>
                               {e.email}
                             </div>
                           </div>
@@ -1297,18 +1427,19 @@ export default function OwnerPage() {
                 {employees.length === 0 ? (
                   <div
                     style={{
-                      background: "white",
+                      background: "#15151a",
                       borderRadius: 16,
                       padding: 60,
                       textAlign: "center",
-                      boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+                      boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+                      border: "1px solid #1f1f26",
                     }}
                   >
                     <div style={{ fontSize: 48, marginBottom: 16 }}>👥</div>
-                    <h3 style={{ color: "#1a2744", marginBottom: 8 }}>
+                    <h3 style={{ color: "#f5f5f7", marginBottom: 8 }}>
                       No employees yet
                     </h3>
-                    <p style={{ color: "#8896a5", fontSize: 14 }}>
+                    <p style={{ color: "#9a9aa5", fontSize: 14 }}>
                       Invite your first team member using the button above.
                     </p>
                   </div>
@@ -1317,12 +1448,13 @@ export default function OwnerPage() {
                     <div
                       key={emp.id}
                       style={{
-                        background: "white",
+                        background: "#15151a",
                         borderRadius: 16,
-                        boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+                        boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+                        border: "1px solid #1f1f26",
                         padding: "20px 24px",
                         borderLeft: `4px solid ${
-                          STATUS_COLORS[emp.status]?.bg || "#e8edf3"
+                          STATUS_COLORS[emp.status]?.bg || "#23232b"
                         }`,
                         opacity: emp.status === "revoked" ? 0.6 : 1,
                       }}
@@ -1365,14 +1497,14 @@ export default function OwnerPage() {
                             <div
                               style={{
                                 fontWeight: 700,
-                                color: "#1a2744",
+                                color: "#f5f5f7",
                                 fontSize: 15,
                                 marginBottom: 3,
                               }}
                             >
                               {emp.name}
                             </div>
-                            <div style={{ fontSize: 13, color: "#8896a5" }}>
+                            <div style={{ fontSize: 13, color: "#9a9aa5" }}>
                               {emp.email}
                             </div>
                             {emp.invited_at && emp.status === "invited" && (
@@ -1485,18 +1617,19 @@ export default function OwnerPage() {
                 {expenseNotes.length === 0 ? (
                   <div
                     style={{
-                      background: "white",
+                      background: "#15151a",
                       borderRadius: 16,
                       padding: 60,
                       textAlign: "center",
-                      boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+                      boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+                      border: "1px solid #1f1f26",
                     }}
                   >
                     <div style={{ fontSize: 48, marginBottom: 16 }}>🧾</div>
-                    <h3 style={{ color: "#1a2744", marginBottom: 8 }}>
+                    <h3 style={{ color: "#f5f5f7", marginBottom: 8 }}>
                       No expenses recorded
                     </h3>
-                    <p style={{ color: "#8896a5", fontSize: 14 }}>
+                    <p style={{ color: "#9a9aa5", fontSize: 14 }}>
                       Expenses added by housekeeping and auditors will appear
                       here.
                     </p>
@@ -1506,12 +1639,13 @@ export default function OwnerPage() {
                     <div
                       key={note.id}
                       style={{
-                        background: "white",
+                        background: "#15151a",
                         borderRadius: 16,
-                        boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+                        boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+                        border: "1px solid #1f1f26",
                         padding: "18px 24px",
                         borderLeft: `4px solid ${
-                          CATEGORY_COLORS[note.category]?.bg || "#e8edf3"
+                          CATEGORY_COLORS[note.category]?.bg || "#23232b"
                         }`,
                       }}
                     >
@@ -1541,7 +1675,7 @@ export default function OwnerPage() {
                               marginLeft: "auto",
                               fontSize: 16,
                               fontWeight: 700,
-                              color: "#1a2744",
+                              color: "#f5f5f7",
                             }}
                           >
                             ₱
@@ -1555,14 +1689,14 @@ export default function OwnerPage() {
                         style={{
                           fontSize: 14,
                           lineHeight: 1.65,
-                          color: "#1a2744",
+                          color: "#f5f5f7",
                           marginBottom: 10,
                           whiteSpace: "pre-wrap",
                         }}
                       >
                         {note.content}
                       </p>
-                      <div style={{ fontSize: 12, color: "#8896a5" }}>
+                      <div style={{ fontSize: 12, color: "#9a9aa5" }}>
                         {formatDateTime(note.createdAt)}
                       </div>
                     </div>
@@ -1579,18 +1713,19 @@ export default function OwnerPage() {
                 {payments.length === 0 ? (
                   <div
                     style={{
-                      background: "white",
+                      background: "#15151a",
                       borderRadius: 16,
                       padding: 60,
                       textAlign: "center",
-                      boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+                      boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+                      border: "1px solid #1f1f26",
                     }}
                   >
                     <div style={{ fontSize: 48, marginBottom: 16 }}>💳</div>
-                    <h3 style={{ color: "#1a2744", marginBottom: 8 }}>
+                    <h3 style={{ color: "#f5f5f7", marginBottom: 8 }}>
                       No payments yet
                     </h3>
-                    <p style={{ color: "#8896a5", fontSize: 14 }}>
+                    <p style={{ color: "#9a9aa5", fontSize: 14 }}>
                       Payments will appear here once bookings are created.
                     </p>
                   </div>
@@ -1599,12 +1734,13 @@ export default function OwnerPage() {
                     <div
                       key={p.id}
                       style={{
-                        background: "white",
+                        background: "#15151a",
                         borderRadius: 16,
-                        boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+                        boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+                        border: "1px solid #1f1f26",
                         padding: "20px 24px",
                         borderLeft: `4px solid ${
-                          STATUS_COLORS[p.status]?.bg || "#e8edf3"
+                          STATUS_COLORS[p.status]?.bg || "#23232b"
                         }`,
                       }}
                     >
@@ -1621,7 +1757,7 @@ export default function OwnerPage() {
                           <div
                             style={{
                               fontWeight: 700,
-                              color: "#1a2744",
+                              color: "#f5f5f7",
                               fontSize: 15,
                               marginBottom: 4,
                             }}
@@ -1631,7 +1767,7 @@ export default function OwnerPage() {
                           <div
                             style={{
                               fontSize: 12,
-                              color: "#8896a5",
+                              color: "#9a9aa5",
                               marginBottom: 4,
                             }}
                           >
@@ -1641,7 +1777,7 @@ export default function OwnerPage() {
                             <div
                               style={{
                                 fontSize: 13,
-                                color: "#8896a5",
+                                color: "#9a9aa5",
                                 fontStyle: "italic",
                               }}
                             >
@@ -1654,7 +1790,7 @@ export default function OwnerPage() {
                             style={{
                               fontSize: 20,
                               fontWeight: 700,
-                              color: "#1a2744",
+                              color: "#f5f5f7",
                               marginBottom: 6,
                             }}
                           >
@@ -1679,7 +1815,7 @@ export default function OwnerPage() {
                             <div
                               style={{
                                 fontSize: 11,
-                                color: "#8896a5",
+                                color: "#9a9aa5",
                                 marginTop: 6,
                               }}
                             >
@@ -1723,12 +1859,12 @@ export default function OwnerPage() {
                       style={{
                         width: "100%",
                         padding: "9px 14px 9px 34px",
-                        border: "1.5px solid #e8edf3",
+                        border: "1.5px solid #23232b",
                         borderRadius: 10,
                         fontSize: 13,
-                        color: "#1a2744",
+                        color: "#f5f5f7",
                         outline: "none",
-                        background: "white",
+                        background: "#15151a",
                         fontFamily: "inherit",
                       }}
                     />
@@ -1739,7 +1875,7 @@ export default function OwnerPage() {
                         top: "50%",
                         transform: "translateY(-50%)",
                         fontSize: 13,
-                        color: "#8896a5",
+                        color: "#9a9aa5",
                       }}
                     >
                       🔍
@@ -1751,11 +1887,11 @@ export default function OwnerPage() {
                     onChange={(e) => setFilterProperty(e.target.value)}
                     style={{
                       padding: "9px 12px",
-                      border: "1.5px solid #e8edf3",
+                      border: "1.5px solid #23232b",
                       borderRadius: 10,
                       fontSize: 13,
-                      color: "#1a2744",
-                      background: "white",
+                      color: "#f5f5f7",
+                      background: "#15151a",
                       outline: "none",
                       cursor: "pointer",
                       fontFamily: "inherit",
@@ -1774,11 +1910,11 @@ export default function OwnerPage() {
                     onChange={(e) => setFilterPlatform(e.target.value)}
                     style={{
                       padding: "9px 12px",
-                      border: "1.5px solid #e8edf3",
+                      border: "1.5px solid #23232b",
                       borderRadius: 10,
                       fontSize: 13,
-                      color: "#1a2744",
-                      background: "white",
+                      color: "#f5f5f7",
+                      background: "#15151a",
                       outline: "none",
                       cursor: "pointer",
                       fontFamily: "inherit",
@@ -1797,11 +1933,11 @@ export default function OwnerPage() {
                     onChange={(e) => setFilterPaymentState(e.target.value)}
                     style={{
                       padding: "9px 12px",
-                      border: "1.5px solid #e8edf3",
+                      border: "1.5px solid #23232b",
                       borderRadius: 10,
                       fontSize: 13,
-                      color: "#1a2744",
-                      background: "white",
+                      color: "#f5f5f7",
+                      background: "#15151a",
                       outline: "none",
                       cursor: "pointer",
                       fontFamily: "inherit",
@@ -1818,11 +1954,11 @@ export default function OwnerPage() {
                     onChange={(e) => setFilterBookingStatus(e.target.value)}
                     style={{
                       padding: "9px 12px",
-                      border: "1.5px solid #e8edf3",
+                      border: "1.5px solid #23232b",
                       borderRadius: 10,
                       fontSize: 13,
-                      color: "#1a2744",
-                      background: "white",
+                      color: "#f5f5f7",
+                      background: "#15151a",
                       outline: "none",
                       cursor: "pointer",
                       fontFamily: "inherit",
@@ -1876,7 +2012,7 @@ export default function OwnerPage() {
                     style={{
                       textAlign: "center",
                       padding: 24,
-                      color: "#8896a5",
+                      color: "#9a9aa5",
                     }}
                   >
                     No bookings found.
@@ -1886,12 +2022,13 @@ export default function OwnerPage() {
                     <div
                       key={b.id}
                       style={{
-                        background: "white",
+                        background: "#15151a",
                         borderRadius: 16,
-                        boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+                        boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+                        border: "1px solid #1f1f26",
                         padding: "20px 24px",
                         borderLeft: `4px solid ${
-                          STATUS_COLORS[b.status]?.bg || "#e8edf3"
+                          STATUS_COLORS[b.status]?.bg || "#23232b"
                         }`,
                       }}
                     >
@@ -1933,13 +2070,13 @@ export default function OwnerPage() {
                             <div
                               style={{
                                 fontWeight: 700,
-                                color: "#1a2744",
+                                color: "#f5f5f7",
                                 fontSize: 15,
                               }}
                             >
                               {b.guestName}
                             </div>
-                            <div style={{ fontSize: 12, color: "#8896a5" }}>
+                            <div style={{ fontSize: 12, color: "#9a9aa5" }}>
                               🏠 {b.Property?.name || "—"} · {b.source}
                             </div>
                           </div>
@@ -1964,7 +2101,7 @@ export default function OwnerPage() {
                               <div
                                 style={{
                                   fontSize: 11,
-                                  color: "#8896a5",
+                                  color: "#9a9aa5",
                                   textTransform: "uppercase",
                                   letterSpacing: "0.06em",
                                   marginBottom: 2,
@@ -1976,7 +2113,7 @@ export default function OwnerPage() {
                                 style={{
                                   fontSize: 13,
                                   fontWeight: 600,
-                                  color: "#1a2744",
+                                  color: "#f5f5f7",
                                 }}
                               >
                                 {item.val}
@@ -2026,12 +2163,12 @@ export default function OwnerPage() {
         >
           <div
             style={{
-              background: "white",
+              background: "#15151a",
               borderRadius: 20,
               padding: 36,
               width: "100%",
               maxWidth: 460,
-              boxShadow: "0 32px 80px rgba(0,0,0,0.3)",
+              boxShadow: "0 32px 80px rgba(0,0,0,0.6)",
             }}
           >
             <div
@@ -2042,20 +2179,20 @@ export default function OwnerPage() {
                 marginBottom: 28,
               }}
             >
-              <h2 style={{ fontSize: 20, fontWeight: 700, color: "#1a2744" }}>
+              <h2 style={{ fontSize: 20, fontWeight: 700, color: "#f5f5f7" }}>
                 Invite Employee
               </h2>
               <button
                 onClick={() => setShowInviteForm(false)}
                 style={{
-                  background: "#f0f4f8",
+                  background: "#23232b",
                   border: "none",
                   borderRadius: 8,
                   width: 32,
                   height: 32,
                   cursor: "pointer",
                   fontSize: 18,
-                  color: "#8896a5",
+                  color: "#9a9aa5",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -2078,7 +2215,7 @@ export default function OwnerPage() {
                     (e.currentTarget.style.borderColor = "#2cb5b0")
                   }
                   onBlur={(e) =>
-                    (e.currentTarget.style.borderColor = "#e8edf3")
+                    (e.currentTarget.style.borderColor = "#23232b")
                   }
                 />
               </div>
@@ -2094,7 +2231,7 @@ export default function OwnerPage() {
                     (e.currentTarget.style.borderColor = "#2cb5b0")
                   }
                   onBlur={(e) =>
-                    (e.currentTarget.style.borderColor = "#e8edf3")
+                    (e.currentTarget.style.borderColor = "#23232b")
                   }
                 />
               </div>
@@ -2148,10 +2285,10 @@ export default function OwnerPage() {
                   style={{
                     flex: 1,
                     padding: 12,
-                    border: "1.5px solid #e8edf3",
+                    border: "1.5px solid #23232b",
                     borderRadius: 10,
-                    background: "white",
-                    color: "#8896a5",
+                    background: "#15151a",
+                    color: "#9a9aa5",
                     fontSize: 14,
                     fontWeight: 600,
                     cursor: "pointer",
@@ -2169,7 +2306,7 @@ export default function OwnerPage() {
                     padding: 12,
                     background:
                       inviting || !inviteName.trim() || !inviteEmail.trim()
-                        ? "#e8edf3"
+                        ? "#23232b"
                         : "linear-gradient(135deg, #1a2744, #2cb5b0)",
                     border: "none",
                     borderRadius: 10,
@@ -2201,6 +2338,8 @@ export default function OwnerPage() {
         * { box-sizing: border-box; margin: 0; padding: 0; }
         input[type=number]::-webkit-outer-spin-button,
         input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
+        input::placeholder { color: #5c5c64; }
+        select option { background: #15151a; color: #f5f5f7; }
       `}</style>
     </div>
   );
