@@ -77,7 +77,7 @@ export default function LoginPage() {
 
   return (
     <div
-      className="min-h-screen w-full flex flex-col items-center justify-center px-4 py-10"
+      className="min-h-screen w-full flex flex-col items-center justify-center px-4 py-10 font-sans"
       style={{
         background:
           "linear-gradient(160deg, #1e3a5f 0%, #2f5d8c 45%, #4a90e2 100%)",
@@ -86,7 +86,7 @@ export default function LoginPage() {
       {/* Logo */}
       <div className="flex flex-col items-center mb-4 select-none">
         <img
-          src="/darktrans.png"
+          src="./darktrans.png"
           alt="Integrio"
           className="w-[260px] sm:w-[300px] h-auto"
           style={{ filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.25))" }}
