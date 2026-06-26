@@ -241,10 +241,6 @@ export default function LoginPage() {
           </p>
         </form>
       </div>
-
-      <p className="mt-6 text-center text-xs text-white/60">
-        Integrio PMS &copy; {new Date().getFullYear()}
-      </p>
     </div>
   );
 }
