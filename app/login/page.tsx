@@ -84,108 +84,13 @@ export default function LoginPage() {
       }}
     >
       {/* Logo */}
-      <div className="flex flex-col items-center mb-2 select-none">
-        <svg
-          viewBox="0 0 560 230"
+      <div className="flex flex-col items-center mb-4 select-none">
+        <img
+          src="/darktrans.png"
+          alt="Integrio"
           className="w-[260px] sm:w-[300px] h-auto"
           style={{ filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.25))" }}
-        >
-          <defs>
-            <linearGradient id="doorGrad" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0" stopColor="#0d9488" />
-              <stop offset="1" stopColor="#5eead4" />
-            </linearGradient>
-            <linearGradient id="circleGrad" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0" stopColor="#5eead4" />
-              <stop offset="1" stopColor="#cbd5e1" />
-            </linearGradient>
-          </defs>
-
-          {/* Roof */}
-          <polyline
-            points="70,150 270,40 470,150"
-            fill="none"
-            stroke="#d6dee8"
-            strokeWidth="16"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-
-          {/* Window in roof */}
-          <rect x="230" y="80" width="80" height="60" rx="6" fill="#d6dee8" />
-          <rect
-            x="266"
-            y="80"
-            width="8"
-            height="60"
-            fill="#1e3a5f"
-            opacity="0.15"
-          />
-          <rect
-            x="230"
-            y="106"
-            width="80"
-            height="8"
-            fill="#1e3a5f"
-            opacity="0.15"
-          />
-
-          {/* Door (stands in for the "I") */}
-          <rect
-            x="58"
-            y="150"
-            width="42"
-            height="72"
-            rx="18"
-            fill="url(#doorGrad)"
-          />
-          <circle cx="90" cy="190" r="3.5" fill="#f0fdfa" />
-
-          {/* Wordmark */}
-          <text
-            x="112"
-            y="218"
-            fontFamily="Arial, sans-serif"
-            fontWeight="700"
-            fontSize="108"
-            fill="#d6dee8"
-          >
-            ntegri
-          </text>
-
-          {/* Circular window (stands in for the final "o") */}
-          <circle
-            cx="500"
-            cy="190"
-            r="36"
-            fill="url(#circleGrad)"
-            opacity="0.25"
-          />
-          <circle
-            cx="500"
-            cy="190"
-            r="36"
-            fill="none"
-            stroke="#d6dee8"
-            strokeWidth="8"
-          />
-          <line
-            x1="464"
-            y1="190"
-            x2="536"
-            y2="190"
-            stroke="#d6dee8"
-            strokeWidth="6"
-          />
-          <line
-            x1="500"
-            y1="154"
-            x2="500"
-            y2="226"
-            stroke="#d6dee8"
-            strokeWidth="6"
-          />
-        </svg>
+        />
       </div>
 
       {/* Card */}
