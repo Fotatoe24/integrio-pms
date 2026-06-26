@@ -1,14 +1,14 @@
 "use client";
 
 import { supabase } from "@/lib/supabase";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
 
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -22,7 +22,6 @@ export default function LoginPage() {
     setError("");
 
     try {
-      // Fetch user from Supabase directly (client-side)
       const { data: user, error: fetchError } = await supabase
         .from("User")
         .select("*")
@@ -35,7 +34,6 @@ export default function LoginPage() {
         return;
       }
 
-      // Verify password client-side
       const bcrypt = await import("bcryptjs");
       const isValid = await bcrypt.compare(password, user.password);
 
@@ -45,7 +43,6 @@ export default function LoginPage() {
         return;
       }
 
-      // After verifying password is valid, add this before router.push:
       document.cookie = `auth-token=loggedin; path=/; max-age=${
         60 * 60 * 24 * 7
       }`;
@@ -79,98 +76,216 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="login-root">
-      <div className="login-bg">
-        <div className="orb orb-1" />
-        <div className="orb orb-2" />
-        <div className="grid-lines" />
+    <div
+      className="min-h-screen w-full flex flex-col items-center justify-center px-4 py-10"
+      style={{
+        background:
+          "linear-gradient(160deg, #1e3a5f 0%, #2f5d8c 45%, #4a90e2 100%)",
+      }}
+    >
+      {/* Logo */}
+      <div className="flex flex-col items-center mb-2 select-none">
+        <svg
+          viewBox="0 0 560 230"
+          className="w-[260px] sm:w-[300px] h-auto"
+          style={{ filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.25))" }}
+        >
+          <defs>
+            <linearGradient id="doorGrad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stopColor="#0d9488" />
+              <stop offset="1" stopColor="#5eead4" />
+            </linearGradient>
+            <linearGradient id="circleGrad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stopColor="#5eead4" />
+              <stop offset="1" stopColor="#cbd5e1" />
+            </linearGradient>
+          </defs>
+
+          {/* Roof */}
+          <polyline
+            points="70,150 270,40 470,150"
+            fill="none"
+            stroke="#d6dee8"
+            strokeWidth="16"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+
+          {/* Window in roof */}
+          <rect x="230" y="80" width="80" height="60" rx="6" fill="#d6dee8" />
+          <rect
+            x="266"
+            y="80"
+            width="8"
+            height="60"
+            fill="#1e3a5f"
+            opacity="0.15"
+          />
+          <rect
+            x="230"
+            y="106"
+            width="80"
+            height="8"
+            fill="#1e3a5f"
+            opacity="0.15"
+          />
+
+          {/* Door (stands in for the "I") */}
+          <rect
+            x="58"
+            y="150"
+            width="42"
+            height="72"
+            rx="18"
+            fill="url(#doorGrad)"
+          />
+          <circle cx="90" cy="190" r="3.5" fill="#f0fdfa" />
+
+          {/* Wordmark */}
+          <text
+            x="112"
+            y="218"
+            fontFamily="Arial, sans-serif"
+            fontWeight="700"
+            fontSize="108"
+            fill="#d6dee8"
+          >
+            ntegri
+          </text>
+
+          {/* Circular window (stands in for the final "o") */}
+          <circle
+            cx="500"
+            cy="190"
+            r="36"
+            fill="url(#circleGrad)"
+            opacity="0.25"
+          />
+          <circle
+            cx="500"
+            cy="190"
+            r="36"
+            fill="none"
+            stroke="#d6dee8"
+            strokeWidth="8"
+          />
+          <line
+            x1="464"
+            y1="190"
+            x2="536"
+            y2="190"
+            stroke="#d6dee8"
+            strokeWidth="6"
+          />
+          <line
+            x1="500"
+            y1="154"
+            x2="500"
+            y2="226"
+            stroke="#d6dee8"
+            strokeWidth="6"
+          />
+        </svg>
       </div>
 
-      <div className="login-card">
-        <div className="login-brand">
-          <div className="brand-icon">
-            <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-              <rect
-                x="2"
-                y="2"
-                width="10"
-                height="10"
-                rx="2"
-                fill="currentColor"
-                opacity="0.9"
-              />
-              <rect
-                x="16"
-                y="2"
-                width="10"
-                height="10"
-                rx="2"
-                fill="currentColor"
-                opacity="0.5"
-              />
-              <rect
-                x="2"
-                y="16"
-                width="10"
-                height="10"
-                rx="2"
-                fill="currentColor"
-                opacity="0.5"
-              />
-              <rect
-                x="16"
-                y="16"
-                width="10"
-                height="10"
-                rx="2"
-                fill="currentColor"
-                opacity="0.9"
-              />
-            </svg>
-          </div>
-          <span className="brand-name">Integrio</span>
-        </div>
+      {/* Card */}
+      <div className="w-full max-w-[420px] bg-white rounded-2xl shadow-2xl px-8 sm:px-9 py-9">
+        <h1 className="text-2xl sm:text-[26px] font-bold text-center text-[#1e3a5f] mb-7">
+          Login
+        </h1>
 
-        <div className="login-header">
-          <h1>Welcome back</h1>
-          <p>Sign in to your property dashboard</p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="login-form">
-          <div className="field">
-            <label htmlFor="email">Email address</label>
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              required
-              autoComplete="email"
-            />
+        <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+          {/* Email */}
+          <div>
+            <label
+              htmlFor="email"
+              className="block text-sm text-gray-700 mb-1.5"
+            >
+              Email
+            </label>
+            <div className="relative">
+              <input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Enter your email"
+                required
+                autoComplete="email"
+                className="w-full rounded-lg border border-gray-300 pl-4 pr-11 py-3 text-[15px] text-gray-800 placeholder-gray-400 outline-none transition-colors focus:border-[#4a90e2] focus:ring-2 focus:ring-[#4a90e2]/20"
+              />
+              <svg
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-500"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <rect x="3" y="5" width="18" height="14" rx="2" />
+                <path d="M3 7l9 6 9-6" />
+              </svg>
+            </div>
           </div>
 
-          <div className="field">
-            <label htmlFor="password">Password</label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              required
-              autoComplete="current-password"
-            />
-
-            <div style={{ textAlign: "right", marginTop: -12 }}>
+          {/* Password */}
+          <div>
+            <label
+              htmlFor="password"
+              className="block text-sm text-gray-700 mb-1.5"
+            >
+              Password
+            </label>
+            <div className="relative">
+              <input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter your password"
+                required
+                autoComplete="current-password"
+                className="w-full rounded-lg border border-gray-300 pl-4 pr-11 py-3 text-[15px] text-gray-800 placeholder-gray-400 outline-none transition-colors focus:border-[#4a90e2] focus:ring-2 focus:ring-[#4a90e2]/20"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 grid place-items-center w-6 h-6 rounded"
+              >
+                {showPassword ? (
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <path d="M3 3l18 18" />
+                    <path d="M10.6 10.6a2 2 0 002.8 2.8" />
+                    <path d="M9.5 5.2A10.4 10.4 0 0112 5c5 0 9 4 10 7-0.4 1.2-1.2 2.6-2.4 3.9M6.1 6.6C4 8 2.5 10 2 12c1 3 5 7 10 7 1.1 0 2.1-0.2 3-0.5" />
+                  </svg>
+                ) : (
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                )}
+              </button>
+            </div>
+            <div className="text-right mt-1.5">
               <a
                 href="/forgot-password"
-                style={{
-                  fontSize: 13,
-                  color: "#4ecdc4",
-                  textDecoration: "none",
-                  fontFamily: "-apple-system, sans-serif",
-                }}
+                className="text-xs text-[#4a90e2] hover:underline"
               >
                 Forgot password?
               </a>
@@ -178,7 +293,7 @@ export default function LoginPage() {
           </div>
 
           {error && (
-            <div className="error-msg">
+            <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5">
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                 <circle
                   cx="8"
@@ -198,210 +313,33 @@ export default function LoginPage() {
             </div>
           )}
 
-          <button type="submit" className="login-btn" disabled={loading}>
-            {loading ? <span className="spinner" /> : "Sign in"}
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-[#1e3a5f] hover:bg-[#264c79] disabled:opacity-60 disabled:cursor-not-allowed text-white font-medium text-base rounded-lg py-3.5 mt-2 transition-colors flex items-center justify-center"
+          >
+            {loading ? (
+              <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : (
+              "Login"
+            )}
           </button>
 
-          <p
-            style={{
-              textAlign: "center",
-              fontSize: 13,
-              color: "rgba(240,236,228,0.4)",
-              fontFamily: "-apple-system, sans-serif",
-              marginTop: 8,
-            }}
-          >
-            Don't have an account?{" "}
+          <p className="text-center text-sm text-gray-700 mt-1">
+            Don&apos;t have an account?{" "}
             <a
               href="/signup"
-              style={{ color: "#4ecdc4", textDecoration: "none" }}
+              className="text-[#4a90e2] font-semibold hover:underline"
             >
-              Sign up
+              Sign Up
             </a>
           </p>
         </form>
-
-        <p className="login-footer">
-          Integrio PMS &copy; {new Date().getFullYear()}
-        </p>
       </div>
 
-      <style>{`
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        .login-root {
-          min-height: 100vh;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background: #0c0e12;
-          font-family: 'Georgia', serif;
-          position: relative;
-          overflow: hidden;
-        }
-        .login-bg { position: absolute; inset: 0; pointer-events: none; }
-        .orb {
-          position: absolute;
-          border-radius: 50%;
-          filter: blur(80px);
-          opacity: 0.18;
-        }
-        .orb-1 {
-          width: 500px; height: 500px;
-          background: radial-gradient(circle, #c9a84c, transparent 70%);
-          top: -120px; left: -100px;
-          animation: drift 12s ease-in-out infinite alternate;
-        }
-        .orb-2 {
-          width: 400px; height: 400px;
-          background: radial-gradient(circle, #4c7ac9, transparent 70%);
-          bottom: -100px; right: -80px;
-          animation: drift 15s ease-in-out infinite alternate-reverse;
-        }
-        .grid-lines {
-          position: absolute; inset: 0;
-          background-image:
-            linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
-          background-size: 48px 48px;
-        }
-        @keyframes drift {
-          from { transform: translate(0, 0) scale(1); }
-          to   { transform: translate(40px, 30px) scale(1.1); }
-        }
-        .login-card {
-          position: relative;
-          z-index: 10;
-          width: 100%;
-          max-width: 420px;
-          margin: 24px;
-          background: rgba(255,255,255,0.03);
-          border: 1px solid rgba(255,255,255,0.08);
-          border-radius: 20px;
-          padding: 44px 40px 36px;
-          backdrop-filter: blur(24px);
-          box-shadow: 0 32px 80px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08);
-          animation: cardIn 0.6s cubic-bezier(0.16,1,0.3,1) both;
-        }
-        @keyframes cardIn {
-          from { opacity: 0; transform: translateY(24px) scale(0.97); }
-          to   { opacity: 1; transform: translateY(0) scale(1); }
-        }
-        .login-brand {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          margin-bottom: 36px;
-          color: #c9a84c;
-        }
-        .brand-icon { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; }
-        .brand-name {
-          font-size: 18px;
-          font-weight: 600;
-          letter-spacing: 0.08em;
-          text-transform: uppercase;
-          color: #c9a84c;
-        }
-        .login-header { margin-bottom: 32px; }
-        .login-header h1 {
-          font-size: 28px;
-          font-weight: 400;
-          color: #f0ece4;
-          letter-spacing: -0.02em;
-          margin-bottom: 6px;
-        }
-        .login-header p {
-          font-size: 14px;
-          color: rgba(240,236,228,0.45);
-          font-family: -apple-system, sans-serif;
-        }
-        .login-form { display: flex; flex-direction: column; gap: 20px; }
-        .field { display: flex; flex-direction: column; gap: 8px; }
-        .field label {
-          font-size: 12px;
-          font-family: -apple-system, sans-serif;
-          color: rgba(240,236,228,0.5);
-          letter-spacing: 0.08em;
-          text-transform: uppercase;
-          font-weight: 500;
-        }
-        .field input {
-          background: rgba(255,255,255,0.04);
-          border: 1px solid rgba(255,255,255,0.1);
-          border-radius: 10px;
-          padding: 13px 16px;
-          color: #f0ece4;
-          font-size: 15px;
-          font-family: -apple-system, sans-serif;
-          outline: none;
-          transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
-          width: 100%;
-        }
-        .field input::placeholder { color: rgba(240,236,228,0.2); }
-        .field input:focus {
-          border-color: rgba(201,168,76,0.6);
-          background: rgba(201,168,76,0.05);
-          box-shadow: 0 0 0 3px rgba(201,168,76,0.08);
-        }
-        .error-msg {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          font-size: 13px;
-          font-family: -apple-system, sans-serif;
-          color: #e07070;
-          background: rgba(224,112,112,0.08);
-          border: 1px solid rgba(224,112,112,0.2);
-          border-radius: 8px;
-          padding: 10px 14px;
-          animation: shake 0.3s ease;
-        }
-        @keyframes shake {
-          0%,100% { transform: translateX(0); }
-          25% { transform: translateX(-6px); }
-          75% { transform: translateX(6px); }
-        }
-        .login-btn {
-          margin-top: 4px;
-          background: linear-gradient(135deg, #c9a84c 0%, #e8c96a 50%, #c9a84c 100%);
-          border: none;
-          border-radius: 10px;
-          padding: 14px;
-          color: #1a1508;
-          font-size: 15px;
-          font-weight: 600;
-          font-family: -apple-system, sans-serif;
-          cursor: pointer;
-          transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
-          box-shadow: 0 4px 24px rgba(201,168,76,0.25);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          height: 48px;
-          width: 100%;
-        }
-        .login-btn:hover:not(:disabled) {
-          opacity: 0.92;
-          transform: translateY(-1px);
-          box-shadow: 0 8px 32px rgba(201,168,76,0.35);
-        }
-        .login-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-        .spinner {
-          width: 18px; height: 18px;
-          border: 2px solid rgba(26,21,8,0.3);
-          border-top-color: #1a1508;
-          border-radius: 50%;
-          animation: spin 0.7s linear infinite;
-          display: inline-block;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .login-footer {
-          margin-top: 28px;
-          text-align: center;
-          font-size: 12px;
-          font-family: -apple-system, sans-serif;
-          color: rgba(240,236,228,0.2);
-        }
-      `}</style>
+      <p className="mt-6 text-center text-xs text-white/60">
+        Integrio PMS &copy; {new Date().getFullYear()}
+      </p>
     </div>
   );
 }
