@@ -318,6 +318,20 @@ export default function AuditorPage() {
             Auditor
           </span>
         </div>
+
+        <a
+          href="/settings"
+          style={{
+            fontSize: 13,
+            color: "#8896a5",
+            border: "1.5px solid #e8edf3",
+            borderRadius: 8,
+            padding: "6px 14px",
+            textDecoration: "none",
+          }}
+        >
+          Settings
+        </a>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <span style={{ fontSize: 13, color: "#8896a5" }}>{user.name}</span>
 

@@ -81,6 +81,13 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  --brand-bg: #f0f4f8;
+  --brand-surface: #ffffff;
+  --brand-text: #1a2744;
+  --brand-text-muted: #8896a5;
+  --brand-border: #e8edf3;
+  --brand-accent: #2cb5b0;
+  --brand-accent-dark: #1a2744;
 }
 
 .dark {
@@ -115,6 +122,13 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+  --brand-bg: #0f1419;
+  --brand-surface: #1a1f26;
+  --brand-text: #f0f4f8;
+  --brand-text-muted: #8896a5;
+  --brand-border: #2a313c;
+  --brand-accent: #2cb5b0;
+  --brand-accent-dark: #2cb5b0;
 }
 
 @layer base {

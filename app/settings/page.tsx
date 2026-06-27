@@ -1,0 +1,440 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { getCurrentUser, IntegrioUser } from "@/lib/auth";
+import { useTheme } from "@/contexts/ThemeContext";
+
+const ROLE_HOME: Record<string, string> = {
+  owner: "/owner",
+  booker: "/dashboard",
+  auditor: "/auditor",
+  housekeeping: "/housekeeping",
+  ADMIN: "/owner",
+  STAFF: "/dashboard",
+};
+
+const ROLE_BADGE: Record<string, { bg: string; color: string; label: string }> =
+  {
+    owner: { bg: "#e8d5f5", color: "#5a2d82", label: "Owner" },
+    booker: { bg: "#d1ecf1", color: "#0c5460", label: "Booker" },
+    auditor: { bg: "#fff3cd", color: "#856404", label: "Auditor" },
+    housekeeping: { bg: "#d4edda", color: "#155724", label: "Housekeeping" },
+    ADMIN: { bg: "#e8d5f5", color: "#5a2d82", label: "Owner" },
+    STAFF: { bg: "#d1ecf1", color: "#0c5460", label: "Booker" },
+  };
+
+const THEME_OPTIONS: {
+  value: "light" | "dark" | "system";
+  label: string;
+  icon: string;
+  desc: string;
+}[] = [
+  { value: "light", label: "Light", icon: "☀️", desc: "Always use light mode" },
+  { value: "dark", label: "Dark", icon: "🌙", desc: "Always use dark mode" },
+  {
+    value: "system",
+    label: "System",
+    icon: "🖥️",
+    desc: "Match your device settings",
+  },
+];
+
+export default function SettingsPage() {
+  const router = useRouter();
+  const { theme, setTheme } = useTheme();
+  const [user, setUser] = useState<IntegrioUser | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    document.title = "Settings — Integrio";
+    const u = getCurrentUser();
+    if (!u) {
+      router.push("/login");
+      return;
+    }
+    setUser(u);
+  }, []);
+
+  async function handleThemeChange(value: "light" | "dark" | "system") {
+    await setTheme(value);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  }
+
+  if (!user) return null;
+
+  const badge = ROLE_BADGE[user.role] || ROLE_BADGE.booker;
+
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "var(--brand-bg, #f0f4f8)",
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      }}
+    >
+      {/* Header */}
+      <div
+        style={{
+          background: "var(--brand-surface, white)",
+          borderBottom: "1px solid var(--brand-border, #e8edf3)",
+          padding: "0 32px",
+          height: 64,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          position: "sticky",
+          top: 0,
+          zIndex: 50,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 10,
+              background: "linear-gradient(135deg, #1a2744, #2cb5b0)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <svg width="18" height="18" viewBox="0 0 28 28" fill="none">
+              <rect
+                x="2"
+                y="2"
+                width="10"
+                height="10"
+                rx="2"
+                fill="white"
+                opacity="0.9"
+              />
+              <rect
+                x="16"
+                y="2"
+                width="10"
+                height="10"
+                rx="2"
+                fill="white"
+                opacity="0.5"
+              />
+              <rect
+                x="2"
+                y="16"
+                width="10"
+                height="10"
+                rx="2"
+                fill="white"
+                opacity="0.5"
+              />
+              <rect
+                x="16"
+                y="16"
+                width="10"
+                height="10"
+                rx="2"
+                fill="white"
+                opacity="0.9"
+              />
+            </svg>
+          </div>
+          <span
+            style={{
+              fontSize: 16,
+              fontWeight: 700,
+              color: "var(--brand-text, #1a2744)",
+            }}
+          >
+            Integrio
+          </span>
+          <span
+            style={{
+              fontSize: 12,
+              fontWeight: 600,
+              background: badge.bg,
+              color: badge.color,
+              borderRadius: 20,
+              padding: "3px 10px",
+            }}
+          >
+            {badge.label}
+          </span>
+        </div>
+
+        <a
+          href={ROLE_HOME[user.role] || "/dashboard"}
+          style={{
+            fontSize: 13,
+            color: "var(--brand-text-muted, #8896a5)",
+            border: "1.5px solid var(--brand-border, #e8edf3)",
+            borderRadius: 8,
+            padding: "6px 14px",
+            textDecoration: "none",
+          }}
+        >
+          ← Back to dashboard
+        </a>
+      </div>
+
+      <div
+        style={{ maxWidth: 720, margin: "0 auto", padding: "32px 24px 80px" }}
+      >
+        <div style={{ marginBottom: 28 }}>
+          <h1
+            style={{
+              fontSize: 24,
+              fontWeight: 700,
+              color: "var(--brand-text, #1a2744)",
+              marginBottom: 4,
+            }}
+          >
+            Settings
+          </h1>
+          <p
+            style={{ color: "var(--brand-text-muted, #8896a5)", fontSize: 14 }}
+          >
+            Manage your account preferences
+          </p>
+        </div>
+
+        {/* Appearance section */}
+        <div
+          style={{
+            background: "var(--brand-surface, white)",
+            borderRadius: 16,
+            boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+            padding: "28px 28px",
+            marginBottom: 20,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: 20,
+            }}
+          >
+            <div>
+              <h2
+                style={{
+                  fontSize: 16,
+                  fontWeight: 700,
+                  color: "var(--brand-text, #1a2744)",
+                  marginBottom: 4,
+                }}
+              >
+                Appearance
+              </h2>
+              <p
+                style={{
+                  fontSize: 13,
+                  color: "var(--brand-text-muted, #8896a5)",
+                }}
+              >
+                Choose how Integrio looks on this and all your devices
+              </p>
+            </div>
+            {saved && (
+              <span
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: "#155724",
+                  background: "#d4edda",
+                  borderRadius: 20,
+                  padding: "4px 12px",
+                }}
+              >
+                ✓ Saved
+              </span>
+            )}
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(3, 1fr)",
+              gap: 12,
+            }}
+          >
+            {THEME_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => handleThemeChange(opt.value)}
+                style={{
+                  padding: "20px 16px",
+                  borderRadius: 12,
+                  border:
+                    theme === opt.value
+                      ? "2px solid #2cb5b0"
+                      : "1.5px solid var(--brand-border, #e8edf3)",
+                  background:
+                    theme === opt.value
+                      ? "rgba(44,181,176,0.08)"
+                      : "var(--brand-surface, white)",
+                  cursor: "pointer",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 8,
+                  transition: "all 0.15s",
+                }}
+              >
+                <span style={{ fontSize: 28 }}>{opt.icon}</span>
+                <span
+                  style={{
+                    fontSize: 14,
+                    fontWeight: 700,
+                    color: "var(--brand-text, #1a2744)",
+                  }}
+                >
+                  {opt.label}
+                </span>
+                <span
+                  style={{
+                    fontSize: 11,
+                    color: "var(--brand-text-muted, #8896a5)",
+                    textAlign: "center",
+                  }}
+                >
+                  {opt.desc}
+                </span>
+                {theme === opt.value && (
+                  <span
+                    style={{ fontSize: 11, fontWeight: 600, color: "#2cb5b0" }}
+                  >
+                    Active
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Account info section */}
+        <div
+          style={{
+            background: "var(--brand-surface, white)",
+            borderRadius: 16,
+            boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+            padding: "28px 28px",
+          }}
+        >
+          <h2
+            style={{
+              fontSize: 16,
+              fontWeight: 700,
+              color: "var(--brand-text, #1a2744)",
+              marginBottom: 20,
+            }}
+          >
+            Account
+          </h2>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 13,
+                  color: "var(--brand-text-muted, #8896a5)",
+                }}
+              >
+                Name
+              </span>
+              <span
+                style={{
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: "var(--brand-text, #1a2744)",
+                }}
+              >
+                {user.name}
+              </span>
+            </div>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 13,
+                  color: "var(--brand-text-muted, #8896a5)",
+                }}
+              >
+                Email
+              </span>
+              <span
+                style={{
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: "var(--brand-text, #1a2744)",
+                }}
+              >
+                {user.email}
+              </span>
+            </div>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 13,
+                  color: "var(--brand-text-muted, #8896a5)",
+                }}
+              >
+                Role
+              </span>
+              <span
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  background: badge.bg,
+                  color: badge.color,
+                  borderRadius: 20,
+                  padding: "3px 10px",
+                }}
+              >
+                {badge.label}
+              </span>
+            </div>
+            <div
+              style={{
+                paddingTop: 8,
+                borderTop: "1px solid var(--brand-border, #e8edf3)",
+              }}
+            >
+              <a
+                href="/change-password"
+                style={{
+                  display: "inline-block",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: "#2cb5b0",
+                  textDecoration: "none",
+                  marginTop: 12,
+                }}
+              >
+                Change password →
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
