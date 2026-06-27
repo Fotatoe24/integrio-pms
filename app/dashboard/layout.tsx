@@ -212,7 +212,7 @@ export default function DashboardLayout({
       {/* Sidebar */}
       <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
         <div className="sidebar-logo">
-          <img src="./darktrans.png" alt="Integrio" className="logo-img" />
+          <img src="/darktrans.png" alt="Integrio" className="logo-img" />
         </div>
 
         <nav className="sidebar-nav">
