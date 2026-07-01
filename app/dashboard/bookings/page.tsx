@@ -551,7 +551,7 @@ export default function BookingsPage() {
     display: "block",
     fontSize: 11,
     fontWeight: 600,
-    color: "#8896a5",
+    color: "var(--brand-text-muted)",
     textTransform: "uppercase",
     letterSpacing: "0.06em",
     marginBottom: 6,
@@ -562,7 +562,7 @@ export default function BookingsPage() {
     border: "1.5px solid #e8edf3",
     borderRadius: 10,
     fontSize: 14,
-    color: "#1a2744",
+    color: "var(--brand-surface)",
     outline: "none",
     background: "white",
     fontFamily: "inherit",
@@ -614,13 +614,13 @@ export default function BookingsPage() {
             style={{
               fontSize: 24,
               fontWeight: 700,
-              color: "#1a2744",
+              color: "var(--brand-surface)",
               marginBottom: 4,
             }}
           >
             Bookings
           </h1>
-          <p style={{ color: "#8896a5", fontSize: 14 }}>
+          <p style={{ color: "var(--brand-text-muted)", fontSize: 14 }}>
             {filtered.length} booking{filtered.length !== 1 ? "s" : ""}
           </p>
         </div>
@@ -636,7 +636,7 @@ export default function BookingsPage() {
               borderRadius: 10,
               fontSize: 13,
               fontWeight: 600,
-              color: "#1a2744",
+              color: "var(--brand-surface)",
               background: "white",
               textDecoration: "none",
             }}
@@ -693,7 +693,7 @@ export default function BookingsPage() {
                 border: "1.5px solid #e8edf3",
                 borderRadius: 10,
                 fontSize: 13,
-                color: "#1a2744",
+                color: "var(--brand-surface)",
                 outline: "none",
                 background: "white",
                 fontFamily: "inherit",
@@ -706,7 +706,7 @@ export default function BookingsPage() {
                 top: "50%",
                 transform: "translateY(-50%)",
                 fontSize: 13,
-                color: "#8896a5",
+                color: "var(--brand-text-muted)",
               }}
             >
               🔍
@@ -722,7 +722,7 @@ export default function BookingsPage() {
                   background: "none",
                   border: "none",
                   cursor: "pointer",
-                  color: "#8896a5",
+                  color: "var(--brand-text-muted)",
                   fontSize: 14,
                 }}
               >
@@ -740,7 +740,7 @@ export default function BookingsPage() {
               border: "1.5px solid #e8edf3",
               borderRadius: 10,
               fontSize: 13,
-              color: "#1a2744",
+              color: "var(--brand-surface)",
               background: "white",
               outline: "none",
               cursor: "pointer",
@@ -764,7 +764,7 @@ export default function BookingsPage() {
               border: "1.5px solid #e8edf3",
               borderRadius: 10,
               fontSize: 13,
-              color: "#1a2744",
+              color: "var(--brand-surface)",
               background: "white",
               outline: "none",
               cursor: "pointer",
@@ -785,7 +785,7 @@ export default function BookingsPage() {
               border: "1.5px solid #e8edf3",
               borderRadius: 10,
               fontSize: 13,
-              color: "#1a2744",
+              color: "var(--brand-surface)",
               background: "white",
               outline: "none",
               cursor: "pointer",
@@ -855,8 +855,9 @@ export default function BookingsPage() {
                 fontSize: 13,
                 fontWeight: 600,
                 border: filterStatus === s ? "none" : "1.5px solid #e8edf3",
-                background: filterStatus === s ? "#1a2744" : "white",
-                color: filterStatus === s ? "white" : "#8896a5",
+                background:
+                  filterStatus === s ? "var(--brand-surface)" : "white",
+                color: filterStatus === s ? "white" : "var(--brand-text-muted)",
                 cursor: "pointer",
               }}
             >
@@ -881,7 +882,11 @@ export default function BookingsPage() {
           ⚠️ Add a property first.
           <a
             href="/dashboard/properties"
-            style={{ color: "#1a2744", fontWeight: 600, marginLeft: 8 }}
+            style={{
+              color: "var(--brand-surface)",
+              fontWeight: 600,
+              marginLeft: 8,
+            }}
           >
             Go to Properties →
           </a>
@@ -889,7 +894,13 @@ export default function BookingsPage() {
       )}
 
       {loading ? (
-        <div style={{ textAlign: "center", padding: 60, color: "#8896a5" }}>
+        <div
+          style={{
+            textAlign: "center",
+            padding: 60,
+            color: "var(--brand-text-muted)",
+          }}
+        >
           Loading bookings...
         </div>
       ) : filtered.length === 0 ? (
@@ -903,10 +914,10 @@ export default function BookingsPage() {
           }}
         >
           <div style={{ fontSize: 48, marginBottom: 16 }}>📅</div>
-          <h3 style={{ color: "#1a2744", marginBottom: 8 }}>
+          <h3 style={{ color: "var(--brand-surface)", marginBottom: 8 }}>
             No bookings found
           </h3>
-          <p style={{ color: "#8896a5", fontSize: 14 }}>
+          <p style={{ color: "var(--brand-text-muted)", fontSize: 14 }}>
             Try adjusting your filters or search query.
           </p>
         </div>
@@ -928,7 +939,7 @@ export default function BookingsPage() {
                   boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
                   padding: "20px 24px",
                   borderLeft: `4px solid ${
-                    STATUS_COLORS[b.status]?.bg || "#e8edf3"
+                    STATUS_COLORS[b.status]?.bg || "var(--brand-border)"
                   }`,
                 }}
               >
@@ -972,13 +983,18 @@ export default function BookingsPage() {
                         <div
                           style={{
                             fontWeight: 700,
-                            color: "#1a2744",
+                            color: "var(--brand-surface)",
                             fontSize: 16,
                           }}
                         >
                           {b.guestName}
                         </div>
-                        <div style={{ fontSize: 12, color: "#8896a5" }}>
+                        <div
+                          style={{
+                            fontSize: 12,
+                            color: "var(--brand-text-muted)",
+                          }}
+                        >
                           {b.contactNo || b.guestEmail || "No contact"} ·{" "}
                           {b.guestCount} guest{b.guestCount !== 1 ? "s" : ""}
                           {b.platform && (
@@ -1040,7 +1056,7 @@ export default function BookingsPage() {
                           <div
                             style={{
                               fontSize: 11,
-                              color: "#8896a5",
+                              color: "var(--brand-text-muted)",
                               textTransform: "uppercase",
                               letterSpacing: "0.06em",
                               marginBottom: 2,
@@ -1052,7 +1068,7 @@ export default function BookingsPage() {
                             style={{
                               fontSize: 13,
                               fontWeight: 600,
-                              color: "#1a2744",
+                              color: "var(--brand-surface)",
                             }}
                           >
                             {item.val}
@@ -1086,7 +1102,7 @@ export default function BookingsPage() {
                             <span
                               style={{
                                 fontSize: 11,
-                                color: "#8896a5",
+                                color: "var(--brand-text-muted)",
                                 fontWeight: 600,
                                 textTransform: "uppercase",
                                 letterSpacing: "0.06em",
@@ -1140,7 +1156,12 @@ export default function BookingsPage() {
                                 Fully paid ✓
                               </span>
                             )}
-                            <span style={{ fontSize: 11, color: "#8896a5" }}>
+                            <span
+                              style={{
+                                fontSize: 11,
+                                color: "var(--brand-text-muted)",
+                              }}
+                            >
                               {isExpanded ? "▲" : "▼"}
                             </span>
                           </div>
@@ -1162,7 +1183,7 @@ export default function BookingsPage() {
                                   alignItems: "center",
                                   justifyContent: "space-between",
                                   padding: "8px 12px",
-                                  background: "#f8fafc",
+                                  background: "var(--brand-bg)",
                                   borderRadius: 8,
                                 }}
                               >
@@ -1171,7 +1192,7 @@ export default function BookingsPage() {
                                     style={{
                                       fontSize: 12,
                                       fontWeight: 600,
-                                      color: "#1a2744",
+                                      color: "var(--brand-surface)",
                                     }}
                                   >
                                     {p.type}
@@ -1179,7 +1200,7 @@ export default function BookingsPage() {
                                   <span
                                     style={{
                                       fontSize: 11,
-                                      color: "#8896a5",
+                                      color: "var(--brand-text-muted)",
                                       marginLeft: 8,
                                     }}
                                   >
@@ -1189,7 +1210,7 @@ export default function BookingsPage() {
                                     <span
                                       style={{
                                         fontSize: 11,
-                                        color: "#8896a5",
+                                        color: "var(--brand-text-muted)",
                                         marginLeft: 8,
                                       }}
                                     >
@@ -1200,7 +1221,7 @@ export default function BookingsPage() {
                                     <span
                                       style={{
                                         fontSize: 11,
-                                        color: "#8896a5",
+                                        color: "var(--brand-text-muted)",
                                         marginLeft: 8,
                                       }}
                                     >
@@ -1226,7 +1247,7 @@ export default function BookingsPage() {
                                     style={{
                                       fontSize: 13,
                                       fontWeight: 700,
-                                      color: "#1a2744",
+                                      color: "var(--brand-surface)",
                                     }}
                                   >
                                     ₱
@@ -1289,7 +1310,7 @@ export default function BookingsPage() {
                         borderRadius: 8,
                         fontSize: 12,
                         border: "1.5px solid #e8edf3",
-                        color: "#1a2744",
+                        color: "var(--brand-surface)",
                         cursor: "pointer",
                         background: "white",
                         outline: "none",
@@ -1317,7 +1338,7 @@ export default function BookingsPage() {
                           fontWeight: 600,
                           border: "1.5px solid #e8edf3",
                           background: "white",
-                          color: "#1a2744",
+                          color: "var(--brand-surface)",
                           cursor: "pointer",
                         }}
                       >
@@ -1346,10 +1367,10 @@ export default function BookingsPage() {
                     style={{
                       marginTop: 12,
                       padding: "8px 12px",
-                      background: "#f8fafc",
+                      background: "var(--brand-bg)",
                       borderRadius: 8,
                       fontSize: 13,
-                      color: "#8896a5",
+                      color: "var(--brand-text-muted)",
                       borderLeft: "3px solid #e8edf3",
                     }}
                   >
@@ -1404,24 +1425,36 @@ export default function BookingsPage() {
               }}
             >
               <div>
-                <h2 style={{ fontSize: 20, fontWeight: 700, color: "#1a2744" }}>
+                <h2
+                  style={{
+                    fontSize: 20,
+                    fontWeight: 700,
+                    color: "var(--brand-surface)",
+                  }}
+                >
                   {editingId ? "Edit Booking" : "New Booking"}
                 </h2>
-                <p style={{ fontSize: 13, color: "#8896a5", marginTop: 2 }}>
+                <p
+                  style={{
+                    fontSize: 13,
+                    color: "var(--brand-text-muted)",
+                    marginTop: 2,
+                  }}
+                >
                   Update booking details
                 </p>
               </div>
               <button
                 onClick={() => setShowForm(false)}
                 style={{
-                  background: "#f0f4f8",
+                  background: "var(--brand-bg)",
                   border: "none",
                   borderRadius: 8,
                   width: 32,
                   height: 32,
                   cursor: "pointer",
                   fontSize: 18,
-                  color: "#8896a5",
+                  color: "var(--brand-text-muted)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -1538,7 +1571,7 @@ export default function BookingsPage() {
               {form.propertyId && upcomingForProperty.length > 0 && (
                 <div
                   style={{
-                    background: "#f8fafc",
+                    background: "var(--brand-bg)",
                     borderRadius: 12,
                     padding: "16px",
                   }}
@@ -1547,7 +1580,7 @@ export default function BookingsPage() {
                     style={{
                       fontSize: 11,
                       fontWeight: 700,
-                      color: "#2cb5b0",
+                      color: "var(--brand-accent)",
                       textTransform: "uppercase",
                       letterSpacing: "0.08em",
                       marginBottom: 10,
@@ -1585,7 +1618,7 @@ export default function BookingsPage() {
                               style={{
                                 fontSize: 12,
                                 fontWeight: 600,
-                                color: "#1a2744",
+                                color: "var(--brand-surface)",
                               }}
                             >
                               {new Date(b.checkIn).toLocaleDateString("en-PH", {
@@ -1603,7 +1636,12 @@ export default function BookingsPage() {
                                 }
                               )}
                             </span>
-                            <div style={{ fontSize: 11, color: "#8896a5" }}>
+                            <div
+                              style={{
+                                fontSize: 11,
+                                color: "var(--brand-text-muted)",
+                              }}
+                            >
                               {b.checkInTime && `In ${b.checkInTime}`}{" "}
                               {b.checkOutTime && `· Out ${b.checkOutTime}`}
                             </div>
@@ -1620,7 +1658,7 @@ export default function BookingsPage() {
                             style={{
                               fontSize: 12,
                               fontWeight: 600,
-                              color: "#1a2744",
+                              color: "var(--brand-surface)",
                             }}
                           >
                             {b.guestName}
@@ -1800,7 +1838,7 @@ export default function BookingsPage() {
               {/* Downpayment */}
               <div
                 style={{
-                  background: "#f8fafc",
+                  background: "var(--brand-bg)",
                   borderRadius: 12,
                   padding: "16px",
                 }}
@@ -2196,7 +2234,7 @@ export default function BookingsPage() {
                     border: "1.5px solid #e8edf3",
                     borderRadius: 10,
                     background: "white",
-                    color: "#8896a5",
+                    color: "var(--brand-text-muted)",
                     fontSize: 14,
                     fontWeight: 600,
                     cursor: "pointer",
