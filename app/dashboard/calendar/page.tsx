@@ -53,19 +53,25 @@ export default function CalendarPage() {
           style={{
             fontSize: 24,
             fontWeight: 700,
-            color: "#1a2744",
+            color: "var(--brand-text)",
             marginBottom: 4,
           }}
         >
           Unit Availability Calendar
         </h1>
-        <p style={{ color: "#8896a5", fontSize: 14 }}>
+        <p style={{ color: "var(--brand-text-muted)", fontSize: 14 }}>
           View booking density across all units
         </p>
       </div>
 
       {loading ? (
-        <div style={{ textAlign: "center", padding: 60, color: "#8896a5" }}>
+        <div
+          style={{
+            textAlign: "center",
+            padding: 60,
+            color: "var(--brand-text-muted)",
+          }}
+        >
           Loading...
         </div>
       ) : (

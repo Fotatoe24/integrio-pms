@@ -20,9 +20,9 @@ export default function PropertiesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
 
-   useEffect(() => {
-     document.title = "Properties";
-   }, []);
+  useEffect(() => {
+    document.title = "Properties";
+  }, []);
 
   const [form, setForm] = useState({
     name: "",
@@ -137,7 +137,7 @@ export default function PropertiesPage() {
             style={{
               fontSize: 24,
               fontWeight: 700,
-              color: "#1a2744",
+              color: "var(--brand-text)",
               marginBottom: 4,
             }}
           >
@@ -219,9 +219,9 @@ export default function PropertiesPage() {
             <div
               key={p.id}
               style={{
-                background: "white",
+                background: "var(--popover)",
                 borderRadius: 16,
-                boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+                boxShadow: "0 2px 12px rgba(0,0,0,0.08)",
                 overflow: "hidden",
                 transition: "transform 0.2s, box-shadow 0.2s",
               }}

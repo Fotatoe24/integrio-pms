@@ -111,7 +111,7 @@ export default function DashboardPage() {
           style={{
             fontSize: 24,
             fontWeight: 700,
-            color: "#1a2744",
+            color: "var(--brand-text)",
             marginBottom: 4,
           }}
         >
@@ -134,7 +134,7 @@ export default function DashboardPage() {
           <div
             key={card.label}
             style={{
-              background: "white",
+              background: "var(--popover)",
               borderRadius: 16,
               padding: "24px",
               boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
@@ -146,7 +146,7 @@ export default function DashboardPage() {
               style={{
                 fontSize: 28,
                 fontWeight: 800,
-                color: "#1a2744",
+                color: "var(--brand-text)",
                 marginBottom: 4,
               }}
             >
@@ -161,7 +161,7 @@ export default function DashboardPage() {
 
       <div
         style={{
-          background: "white",
+          background: "var(--popover)",
           borderRadius: 16,
           padding: 24,
           boxShadow: "0 2px 12px rgba(0,0,0,0.06)",

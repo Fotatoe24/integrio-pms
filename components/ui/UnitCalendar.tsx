@@ -163,7 +163,7 @@ export default function UnitCalendar({
             style={{
               fontSize: 18,
               fontWeight: 700,
-              color: "#1a2744",
+              color: "var(--brand-text)",
               minWidth: 140,
               textAlign: "center",
             }}
@@ -179,7 +179,7 @@ export default function UnitCalendar({
               padding: "8px 16px",
               cursor: "pointer",
               fontSize: 14,
-              color: "#1a2744",
+              color: "var(--brand-text)",
               fontWeight: 600,
             }}
           >
@@ -194,7 +194,7 @@ export default function UnitCalendar({
               padding: "8px 14px",
               cursor: "pointer",
               fontSize: 13,
-              color: "#8896a5",
+              color: "var(--brand-text-muted)",
               fontWeight: 600,
             }}
           >

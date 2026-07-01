@@ -228,13 +228,13 @@ export default function FinancialsPage() {
             style={{
               fontSize: 24,
               fontWeight: 700,
-              color: "#1a2744",
+              color: "var(--brand-text)",
               marginBottom: 4,
             }}
           >
             Financials
           </h1>
-          <p style={{ color: "#8896a5", fontSize: 14 }}>
+          <p style={{ color: "var(--brand-text-muted)", fontSize: 14 }}>
             Track income, payments and receivables
           </p>
         </div>
@@ -274,7 +274,7 @@ export default function FinancialsPage() {
           <div
             key={card.label}
             style={{
-              background: "white",
+              background: "var(--popover)",
               borderRadius: 16,
               padding: "20px 24px",
               boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
@@ -286,7 +286,7 @@ export default function FinancialsPage() {
               style={{
                 fontSize: 22,
                 fontWeight: 800,
-                color: "#1a2744",
+                color: "var(--brand-text)",
                 marginBottom: 2,
               }}
             >
@@ -296,7 +296,7 @@ export default function FinancialsPage() {
             <div
               style={{
                 fontSize: 12,
-                color: "#8896a5",
+                color: "var(--brand-text-muted)",
                 fontWeight: 600,
                 textTransform: "uppercase",
                 letterSpacing: "0.06em",
@@ -322,8 +322,8 @@ export default function FinancialsPage() {
               fontSize: 13,
               fontWeight: 600,
               border: filterStatus === s ? "none" : "1.5px solid #e8edf3",
-              background: filterStatus === s ? "#1a2744" : "white",
-              color: filterStatus === s ? "white" : "#8896a5",
+              background: filterStatus === s ? "#1a2744" : "var(--popover)",
+              color: filterStatus === s ? "white" : "var(--brand-text-muted)",
               cursor: "pointer",
             }}
           >
@@ -363,7 +363,7 @@ export default function FinancialsPage() {
       ) : filtered.length === 0 ? (
         <div
           style={{
-            background: "white",
+            background: "var(--popover)",
             borderRadius: 16,
             padding: 60,
             textAlign: "center",
@@ -371,10 +371,10 @@ export default function FinancialsPage() {
           }}
         >
           <div style={{ fontSize: 48, marginBottom: 16 }}>💳</div>
-          <h3 style={{ color: "#1a2744", marginBottom: 8 }}>
+          <h3 style={{ color: "var(--brand-text)", marginBottom: 8 }}>
             No payments found
           </h3>
-          <p style={{ color: "#8896a5", fontSize: 14 }}>
+          <p style={{ color: "var(--brand-text-muted)", fontSize: 14 }}>
             Record your first payment to start tracking financials
           </p>
         </div>
@@ -384,7 +384,7 @@ export default function FinancialsPage() {
             <div
               key={p.id}
               style={{
-                background: "white",
+                background: "var(--popover)",
                 borderRadius: 16,
                 boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
                 padding: "18px 24px",
@@ -435,7 +435,7 @@ export default function FinancialsPage() {
                 <div
                   style={{
                     fontWeight: 700,
-                    color: "#1a2744",
+                    color: "var(--brand-text)",
                     fontSize: 16,
                     marginBottom: 2,
                   }}

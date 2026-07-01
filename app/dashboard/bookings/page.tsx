@@ -174,30 +174,58 @@ export default function BookingsPage() {
     setLoading(false);
   }
 
-  function applyStayType(stayType: string, checkIn: string) {
+  function applyStayType(stayType: string, checkIn: string, checkOut: string) {
     const rate = RATES[stayType as keyof typeof RATES];
     if (!rate || stayType === "Custom") return {};
-    const fee = checkIn && isWeekend(checkIn) ? rate.weekend : rate.weekday;
+    if (!checkIn || !checkOut) {
+      return {
+        checkInTime: rate.checkIn,
+        checkOutTime: rate.checkOut,
+        hoursStayed: rate.hours,
+        totalFee: rate.weekday,
+      };
+    }
+
+    const start = new Date(checkIn);
+    const end = new Date(checkOut);
+    const nightsCount = Math.max(
+      1,
+      Math.round((end.getTime() - start.getTime()) / 86400000)
+    );
+
+    // Sum the per-night rate for each night in the stay, respecting weekday/weekend pricing
+    let totalFee = 0;
+    for (let i = 0; i < nightsCount; i++) {
+      const d = new Date(start);
+      d.setDate(d.getDate() + i);
+      const dayOfWeek = d.getDay();
+      const weekend = dayOfWeek === 5 || dayOfWeek === 6 || dayOfWeek === 0;
+      totalFee += weekend ? rate.weekend : rate.weekday;
+    }
+
     return {
       checkInTime: rate.checkIn,
       checkOutTime: rate.checkOut,
-      hoursStayed: rate.hours,
-      totalFee: fee,
+      hoursStayed: rate.hours * nightsCount,
+      totalFee,
     };
   }
 
   function handleFormChange(patch: Partial<typeof form>) {
     const updated = { ...form, ...patch };
 
-    if (patch.stayType || patch.checkIn) {
-      const rateFields = applyStayType(updated.stayType, updated.checkIn);
+    if (patch.stayType || patch.checkIn || patch.checkOut) {
+      const rateFields = applyStayType(
+        updated.stayType,
+        updated.checkIn,
+        updated.checkOut
+      );
       Object.assign(updated, rateFields);
     }
 
     setForm(updated);
 
     if (updated.propertyId && updated.checkIn && updated.checkOut) {
-      // in handleFormChange
       const warning = checkConflict(
         updated.propertyId,
         updated.checkIn,
@@ -957,13 +985,10 @@ export default function BookingsPage() {
               <div
                 key={b.id}
                 style={{
-                  background: "var(--background)",
+                  background: "var(--popover)",
                   borderRadius: 16,
                   boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
                   padding: "20px 24px",
-                  borderLeft: `4px solid ${
-                    STATUS_COLORS[b.status]?.bg || "var(--brand-border)"
-                  }`,
                 }}
               >
                 <div
@@ -2300,7 +2325,6 @@ export default function BookingsPage() {
         box-sizing: border-box; 
         margin: 0; 
         padding: 0; 
-        background: var(--background);
         }
         input[type=number]::-webkit-outer-spin-button,
         input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }

@@ -119,13 +119,13 @@ export default function GuestsPage() {
           style={{
             fontSize: 24,
             fontWeight: 700,
-            color: "#1a2744",
+            color: "var(--brand-text)",
             marginBottom: 4,
           }}
         >
           Guests
         </h1>
-        <p style={{ color: "#8896a5", fontSize: 14 }}>
+        <p style={{ color: "var(--brand-text-muted)", fontSize: 14 }}>
           Guest count and stay reports
         </p>
       </div>
@@ -168,7 +168,7 @@ export default function GuestsPage() {
           <div
             key={card.label}
             style={{
-              background: "white",
+              background: "var(--popover)",
               borderRadius: 16,
               padding: "20px 24px",
               boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
@@ -180,7 +180,7 @@ export default function GuestsPage() {
               style={{
                 fontSize: 28,
                 fontWeight: 800,
-                color: "#1a2744",
+                color: "var(--brand-text)",
                 marginBottom: 2,
               }}
             >
@@ -215,9 +215,9 @@ export default function GuestsPage() {
             border: "1.5px solid #e8edf3",
             borderRadius: 10,
             fontSize: 14,
-            color: "#1a2744",
+            color: "var(--brand-text)",
             outline: "none",
-            background: "white",
+            background: "var(--background)",
           }}
         />
       </div>
@@ -230,7 +230,7 @@ export default function GuestsPage() {
       ) : filtered.length === 0 ? (
         <div
           style={{
-            background: "white",
+            background: "var(--background)",
             borderRadius: 16,
             padding: 60,
             textAlign: "center",
@@ -246,7 +246,7 @@ export default function GuestsPage() {
       ) : (
         <div
           style={{
-            background: "white",
+            background: "var(--popover)",
             borderRadius: 16,
             boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
             overflow: "hidden",
@@ -256,7 +256,7 @@ export default function GuestsPage() {
             <thead>
               <tr
                 style={{
-                  background: "#f8fafc",
+                  background: "var(--background)",
                   borderBottom: "1px solid #e8edf3",
                 }}
               >
@@ -275,7 +275,7 @@ export default function GuestsPage() {
                       textAlign: "left",
                       fontSize: 11,
                       fontWeight: 700,
-                      color: "#8896a5",
+                      color: "var(--brand-text)",
                       textTransform: "uppercase",
                       letterSpacing: "0.06em",
                     }}
@@ -319,7 +319,7 @@ export default function GuestsPage() {
                       <span
                         style={{
                           fontWeight: 600,
-                          color: "#1a2744",
+                          color: "var(--brand-text)",
                           fontSize: 14,
                         }}
                       >

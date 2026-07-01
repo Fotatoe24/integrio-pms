@@ -332,7 +332,7 @@ export default function DashboardLayout({
         .dash-root {
           display: flex;
           min-height: 100vh;
-          background: #f0f4f8;
+          background: var(--background);
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
         }
 
@@ -340,7 +340,7 @@ export default function DashboardLayout({
         .sidebar {
           width: 260px;
           min-height: 100vh;
-          background: #1a2744;
+          background: var(--sidebar);
           display: flex;
           flex-direction: column;
           position: fixed;
@@ -351,12 +351,14 @@ export default function DashboardLayout({
         }
 
         .sidebar-logo {
-          padding: 24px 20px;
+        padding: 20px 0;
           border-bottom: 1px solid rgba(255,255,255,0.08);
+          justify-content: center;
+          display: flex;
         }
 
         .logo-img {
-          width: 140px;
+          width: 180px;
           object-fit: contain;
         }
 
@@ -494,7 +496,7 @@ export default function DashboardLayout({
 
         .topbar {
           height: 64px;
-          background: white;
+          background: var(--background);
           border-bottom: 1px solid #e8edf3;
           display: flex;
           align-items: center;
@@ -512,7 +514,7 @@ export default function DashboardLayout({
           height: 36px;
           border: none;
           background: none;
-          color: #1a2744;
+          color: var(--brand-text);
           cursor: pointer;
           align-items: center;
           justify-content: center;
@@ -520,18 +522,18 @@ export default function DashboardLayout({
           transition: background 0.2s;
         }
 
-        .menu-btn:hover { background: #f0f4f8; }
+        .menu-btn:hover { background: var(--popover); }
 
         .topbar-title {
           font-size: 17px;
           font-weight: 700;
-          color: #1a2744;
+          color: var(--brand-text);
           flex: 1;
         }
 
         .topbar-date {
           font-size: 13px;
-          color: #8896a5;
+          color: var(--brand-text);
           font-weight: 500;
         }
 

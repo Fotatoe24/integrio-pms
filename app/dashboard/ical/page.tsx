@@ -100,13 +100,13 @@ export default function IcalPage() {
           style={{
             fontSize: 24,
             fontWeight: 700,
-            color: "#1a2744",
+            color: "var(--brand-text)",
             marginBottom: 4,
           }}
         >
           iCal Sync
         </h1>
-        <p style={{ color: "#8896a5", fontSize: 14 }}>
+        <p style={{ color: "var(--brand-text-muted)", fontSize: 14 }}>
           Import from Airbnb and export your availability to Airbnb
         </p>
       </div>
@@ -170,13 +170,19 @@ export default function IcalPage() {
       </div>
 
       {loading ? (
-        <div style={{ textAlign: "center", padding: 60, color: "#8896a5" }}>
+        <div
+          style={{
+            textAlign: "center",
+            padding: 60,
+            color: "var(--brand-text-muted)",
+          }}
+        >
           Loading properties...
         </div>
       ) : properties.length === 0 ? (
         <div
           style={{
-            background: "white",
+            background: "var(--popover)",
             borderRadius: 16,
             padding: 60,
             textAlign: "center",
@@ -200,7 +206,7 @@ export default function IcalPage() {
             <div
               key={p.id}
               style={{
-                background: "white",
+                background: "var(--popover)",
                 borderRadius: 16,
                 padding: 28,
                 boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
@@ -210,7 +216,7 @@ export default function IcalPage() {
                 style={{
                   fontSize: 18,
                   fontWeight: 700,
-                  color: "#1a2744",
+                  color: "var(--brand-text)",
                   marginBottom: 20,
                 }}
               >
@@ -242,14 +248,15 @@ export default function IcalPage() {
                     <>
                       <div
                         style={{
-                          background: "#f0f4f8",
+                          background: "var(--popover)",
                           borderRadius: 8,
                           padding: "10px 14px",
                           fontSize: 12,
                           fontFamily: "monospace",
-                          color: "#1a2744",
+                          color: "var(--brand-text)",
                           wordBreak: "break-all",
                           marginBottom: 12,
+                          border: "2px solid var(--border)",
                         }}
                       >
                         {p.airbnbIcalUrl}
@@ -305,7 +312,7 @@ export default function IcalPage() {
                     style={{
                       fontSize: 13,
                       fontWeight: 700,
-                      color: "#8896a5",
+                      color: "var(--brand-text-muted)",
                       textTransform: "uppercase",
                       letterSpacing: "0.06em",
                       marginBottom: 10,
@@ -315,14 +322,15 @@ export default function IcalPage() {
                   </div>
                   <div
                     style={{
-                      background: "#f0f4f8",
+                      background: "var(--popover)",
                       borderRadius: 8,
                       padding: "10px 14px",
                       fontSize: 12,
                       fontFamily: "monospace",
-                      color: "#1a2744",
+                      color: "var(--brand-text)",
                       wordBreak: "break-all",
                       marginBottom: 12,
+                      border: "2px solid var(--border)",
                     }}
                   >
                     {window.location.origin}/api/ical/{p.ourIcalToken}
