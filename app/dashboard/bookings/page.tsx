@@ -536,14 +536,6 @@ export default function BookingsPage() {
     );
   }
 
-  function paymentSummary(payments: Payment[] = []) {
-    const paid = payments
-      .filter((p) => p.status === "PAID")
-      .reduce((s, p) => s + Number(p.amount), 0);
-    const balance = (form.totalFee || 0) - paid;
-    return { paid, balance };
-  }
-
   function getPaymentState(b: Booking) {
     const paid = (b.Payment || [])
       .filter((p) => p.status === "PAID")

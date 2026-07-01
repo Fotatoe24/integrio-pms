@@ -351,7 +351,7 @@ export default function DashboardLayout({
         }
 
         .sidebar-logo {
-        padding: 20px 0;
+          padding: 20px 0;
           border-bottom: 1px solid rgba(255,255,255,0.08);
           justify-content: center;
           display: flex;
