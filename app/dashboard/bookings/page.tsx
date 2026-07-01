@@ -61,7 +61,6 @@ const SOURCE_ICONS: Record<string, string> = {
 const PLATFORMS = ["Facebook", "TikTok", "Airbnb", "Direct", "Walk-in"];
 const METHODS = ["Cash", "GCash", "Bank Transfer", "Maya"];
 
-// Rates config
 const RATES = {
   "Day (Short) 8AM-8PM": {
     hours: 12,
@@ -89,7 +88,7 @@ const RATES = {
 
 function isWeekend(dateStr: string) {
   const day = new Date(dateStr).getDay();
-  return day === 5 || day === 6 || day === 0; // Fri, Sat, Sun
+  return day === 5 || day === 6 || day === 0;
 }
 
 export default function BookingsPage() {
@@ -128,17 +127,14 @@ export default function BookingsPage() {
     status: "CONFIRMED",
     source: "DIRECT",
     notes: "",
-    // Downpayment
     dpAmount: 0,
     dpDate: "",
     dpMethod: "Cash",
     dpReceivedBy: "",
-    // Full payment
     fpAmount: 0,
     fpDate: "",
     fpMethod: "Cash",
     fpReceivedBy: "",
-    // Additional payment
     apAmount: 0,
     apDate: "",
     apMethod: "GCash",
@@ -193,7 +189,6 @@ export default function BookingsPage() {
   function handleFormChange(patch: Partial<typeof form>) {
     const updated = { ...form, ...patch };
 
-    // Auto-apply rate when stayType or checkIn changes
     if (patch.stayType || patch.checkIn) {
       const rateFields = applyStayType(updated.stayType, updated.checkIn);
       Object.assign(updated, rateFields);
@@ -201,7 +196,6 @@ export default function BookingsPage() {
 
     setForm(updated);
 
-    // Conflict check
     if (updated.propertyId && updated.checkIn && updated.checkOut) {
       const warning = checkConflict(
         updated.propertyId,
@@ -395,7 +389,6 @@ export default function BookingsPage() {
       bookingId = data.id;
     }
 
-    // Handle payments — upsert each type
     const paymentsToSave = [
       {
         type: "DOWNPAYMENT",
@@ -423,7 +416,6 @@ export default function BookingsPage() {
     for (const p of paymentsToSave) {
       if (p.amount <= 0) continue;
 
-      // Check if payment of this type already exists
       const { data: existing } = await supabase
         .from("Payment")
         .select("id")
@@ -450,7 +442,6 @@ export default function BookingsPage() {
       }
     }
 
-    // Night cleaning expense
     if (nightCleaning && bookingId) {
       const user = getCurrentUser();
       const ownerId = user?.owner_id ?? user?.id;
@@ -509,7 +500,6 @@ export default function BookingsPage() {
     return "PARTIAL";
   }
 
-  // Upcoming bookings for selected property (mini calendar in modal)
   const upcomingForProperty = bookings
     .filter(
       (b) =>
@@ -523,7 +513,6 @@ export default function BookingsPage() {
     )
     .slice(0, 5);
 
-  // Combined filtering: status, property/unit, payment state, search
   const filtered = bookings.filter((b) => {
     if (filterStatus !== "ALL" && b.status !== filterStatus) return false;
     if (filterProperty !== "ALL" && b.propertyId !== filterProperty)
@@ -541,7 +530,6 @@ export default function BookingsPage() {
     return true;
   });
 
-  // Computed balance
   const totalPaid =
     (form.dpAmount || 0) + (form.fpAmount || 0) + (form.apAmount || 0);
   const remainingBalance = (form.totalFee || 0) - totalPaid;
@@ -559,12 +547,12 @@ export default function BookingsPage() {
   const fieldInput: React.CSSProperties = {
     width: "100%",
     padding: "10px 14px",
-    border: "1.5px solid #e8edf3",
+    border: "1.5px solid var(--brand-border)",
     borderRadius: 10,
     fontSize: 14,
-    color: "var(--brand-surface)",
+    color: "var(--brand-text)",
     outline: "none",
-    background: "white",
+    background: "var(--background)",
     fontFamily: "inherit",
   };
   const sectionTitle = (color: string, label: string) => (
@@ -614,7 +602,7 @@ export default function BookingsPage() {
             style={{
               fontSize: 24,
               fontWeight: 700,
-              color: "var(--brand-surface)",
+              color: "var(--brand-text)",
               marginBottom: 4,
             }}
           >
@@ -632,12 +620,12 @@ export default function BookingsPage() {
               alignItems: "center",
               gap: 6,
               padding: "9px 16px",
-              border: "1.5px solid #e8edf3",
+              border: "1.5px solid var(--brand-border)",
               borderRadius: 10,
               fontSize: 13,
               fontWeight: 600,
-              color: "var(--brand-surface)",
-              background: "white",
+              color: "var(--brand-text)",
+              background: "var(--background)",
               textDecoration: "none",
             }}
           >
@@ -647,7 +635,8 @@ export default function BookingsPage() {
             onClick={openAdd}
             disabled={properties.length === 0}
             style={{
-              background: "linear-gradient(135deg, #1a2744, #2cb5b0)",
+              background:
+                "linear-gradient(135deg, var(--brand-accent-dark), var(--brand-accent))",
               color: "white",
               border: "none",
               borderRadius: 10,
@@ -690,12 +679,12 @@ export default function BookingsPage() {
               style={{
                 width: "100%",
                 padding: "9px 14px 9px 34px",
-                border: "1.5px solid #e8edf3",
+                border: "1.5px solid var(--brand-border)",
                 borderRadius: 10,
                 fontSize: 13,
-                color: "var(--brand-surface)",
+                color: "var(--brand-text)",
                 outline: "none",
-                background: "white",
+                background: "var(--background)",
                 fontFamily: "inherit",
               }}
             />
@@ -737,11 +726,11 @@ export default function BookingsPage() {
             onChange={(e) => setFilterProperty(e.target.value)}
             style={{
               padding: "9px 12px",
-              border: "1.5px solid #e8edf3",
+              border: "1.5px solid var(--brand-border)",
               borderRadius: 10,
               fontSize: 13,
-              color: "var(--brand-surface)",
-              background: "white",
+              color: "var(--brand-text)",
+              background: "var(--background)",
               outline: "none",
               cursor: "pointer",
               fontFamily: "inherit",
@@ -761,11 +750,11 @@ export default function BookingsPage() {
             onChange={(e) => setFilterPayment(e.target.value)}
             style={{
               padding: "9px 12px",
-              border: "1.5px solid #e8edf3",
+              border: "1.5px solid var(--brand-border)",
               borderRadius: 10,
               fontSize: 13,
-              color: "var(--brand-surface)",
-              background: "white",
+              color: "var(--brand-text)",
+              background: "var(--background)",
               outline: "none",
               cursor: "pointer",
               fontFamily: "inherit",
@@ -782,11 +771,11 @@ export default function BookingsPage() {
             onChange={(e) => setFilterPlatform(e.target.value)}
             style={{
               padding: "9px 12px",
-              border: "1.5px solid #e8edf3",
+              border: "1.5px solid var(--brand-border)",
               borderRadius: 10,
               fontSize: 13,
-              color: "var(--brand-surface)",
-              background: "white",
+              color: "var(--brand-text)",
+              background: "var(--background)",
               outline: "none",
               cursor: "pointer",
               fontFamily: "inherit",
@@ -854,10 +843,18 @@ export default function BookingsPage() {
                 borderRadius: 20,
                 fontSize: 13,
                 fontWeight: 600,
-                border: filterStatus === s ? "none" : "1.5px solid #e8edf3",
+                border:
+                  filterStatus === s
+                    ? "none"
+                    : "1.5px solid var(--brand-border)",
                 background:
-                  filterStatus === s ? "var(--brand-surface)" : "white",
-                color: filterStatus === s ? "white" : "var(--brand-text-muted)",
+                  filterStatus === s
+                    ? "var(--brand-text)"
+                    : "var(--background)",
+                color:
+                  filterStatus === s
+                    ? "var(--background)"
+                    : "var(--brand-text-muted)",
                 cursor: "pointer",
               }}
             >
@@ -883,7 +880,7 @@ export default function BookingsPage() {
           <a
             href="/dashboard/properties"
             style={{
-              color: "var(--brand-surface)",
+              color: "var(--brand-text)",
               fontWeight: 600,
               marginLeft: 8,
             }}
@@ -906,7 +903,7 @@ export default function BookingsPage() {
       ) : filtered.length === 0 ? (
         <div
           style={{
-            background: "white",
+            background: "var(--background)",
             borderRadius: 16,
             padding: 60,
             textAlign: "center",
@@ -914,7 +911,7 @@ export default function BookingsPage() {
           }}
         >
           <div style={{ fontSize: 48, marginBottom: 16 }}>📅</div>
-          <h3 style={{ color: "var(--brand-surface)", marginBottom: 8 }}>
+          <h3 style={{ color: "var(--brand-text)", marginBottom: 8 }}>
             No bookings found
           </h3>
           <p style={{ color: "var(--brand-text-muted)", fontSize: 14 }}>
@@ -934,7 +931,7 @@ export default function BookingsPage() {
               <div
                 key={b.id}
                 style={{
-                  background: "white",
+                  background: "var(--background)",
                   borderRadius: 16,
                   boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
                   padding: "20px 24px",
@@ -967,7 +964,7 @@ export default function BookingsPage() {
                           height: 40,
                           borderRadius: 10,
                           background:
-                            "linear-gradient(135deg, #1a2744, #2cb5b0)",
+                            "linear-gradient(135deg, var(--brand-accent-dark), var(--brand-accent))",
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
@@ -983,7 +980,7 @@ export default function BookingsPage() {
                         <div
                           style={{
                             fontWeight: 700,
-                            color: "var(--brand-surface)",
+                            color: "var(--brand-text)",
                             fontSize: 16,
                           }}
                         >
@@ -1068,7 +1065,7 @@ export default function BookingsPage() {
                             style={{
                               fontSize: 13,
                               fontWeight: 600,
-                              color: "var(--brand-surface)",
+                              color: "var(--brand-text)",
                             }}
                           >
                             {item.val}
@@ -1192,7 +1189,7 @@ export default function BookingsPage() {
                                     style={{
                                       fontSize: 12,
                                       fontWeight: 600,
-                                      color: "var(--brand-surface)",
+                                      color: "var(--brand-text)",
                                     }}
                                   >
                                     {p.type}
@@ -1247,7 +1244,7 @@ export default function BookingsPage() {
                                     style={{
                                       fontSize: 13,
                                       fontWeight: 700,
-                                      color: "var(--brand-surface)",
+                                      color: "var(--brand-text)",
                                     }}
                                   >
                                     ₱
@@ -1309,10 +1306,10 @@ export default function BookingsPage() {
                         padding: "6px 10px",
                         borderRadius: 8,
                         fontSize: 12,
-                        border: "1.5px solid #e8edf3",
-                        color: "var(--brand-surface)",
+                        border: "1.5px solid var(--brand-border)",
+                        color: "var(--brand-text)",
                         cursor: "pointer",
-                        background: "white",
+                        background: "var(--background)",
                         outline: "none",
                       }}
                     >
@@ -1336,9 +1333,9 @@ export default function BookingsPage() {
                           borderRadius: 8,
                           fontSize: 12,
                           fontWeight: 600,
-                          border: "1.5px solid #e8edf3",
-                          background: "white",
-                          color: "var(--brand-surface)",
+                          border: "1.5px solid var(--brand-border)",
+                          background: "var(--background)",
+                          color: "var(--brand-text)",
                           cursor: "pointer",
                         }}
                       >
@@ -1371,7 +1368,7 @@ export default function BookingsPage() {
                       borderRadius: 8,
                       fontSize: 13,
                       color: "var(--brand-text-muted)",
-                      borderLeft: "3px solid #e8edf3",
+                      borderLeft: "3px solid var(--brand-border)",
                     }}
                   >
                     📝 {b.notes}
@@ -1400,7 +1397,7 @@ export default function BookingsPage() {
         >
           <div
             style={{
-              background: "white",
+              background: "var(--background)",
               borderRadius: 20,
               width: "100%",
               maxWidth: 640,
@@ -1417,10 +1414,10 @@ export default function BookingsPage() {
                 alignItems: "center",
                 justifyContent: "space-between",
                 padding: "24px 28px",
-                borderBottom: "1px solid #e8edf3",
+                borderBottom: "1px solid var(--brand-border)",
                 position: "sticky",
                 top: 0,
-                background: "white",
+                background: "var(--background)",
                 zIndex: 10,
               }}
             >
@@ -1429,7 +1426,7 @@ export default function BookingsPage() {
                   style={{
                     fontSize: 20,
                     fontWeight: 700,
-                    color: "var(--brand-surface)",
+                    color: "var(--brand-text)",
                   }}
                 >
                   {editingId ? "Edit Booking" : "New Booking"}
@@ -1600,9 +1597,9 @@ export default function BookingsPage() {
                           alignItems: "center",
                           justifyContent: "space-between",
                           padding: "8px 12px",
-                          background: "white",
+                          background: "var(--background)",
                           borderRadius: 8,
-                          border: "1px solid #e8edf3",
+                          border: "1px solid var(--brand-border)",
                         }}
                       >
                         <div
@@ -1618,7 +1615,7 @@ export default function BookingsPage() {
                               style={{
                                 fontSize: 12,
                                 fontWeight: 600,
-                                color: "var(--brand-surface)",
+                                color: "var(--brand-text)",
                               }}
                             >
                               {new Date(b.checkIn).toLocaleDateString("en-PH", {
@@ -1658,7 +1655,7 @@ export default function BookingsPage() {
                             style={{
                               fontSize: 12,
                               fontWeight: 600,
-                              color: "var(--brand-surface)",
+                              color: "var(--brand-text)",
                             }}
                           >
                             {b.guestName}
@@ -2231,9 +2228,9 @@ export default function BookingsPage() {
                   style={{
                     flex: 1,
                     padding: "12px",
-                    border: "1.5px solid #e8edf3",
+                    border: "1.5px solid var(--brand-border)",
                     borderRadius: 10,
-                    background: "white",
+                    background: "var(--background)",
                     color: "var(--brand-text-muted)",
                     fontSize: 14,
                     fontWeight: 600,
@@ -2248,7 +2245,8 @@ export default function BookingsPage() {
                   style={{
                     flex: 2,
                     padding: "12px",
-                    background: "linear-gradient(135deg, #1a2744, #2cb5b0)",
+                    background:
+                      "linear-gradient(135deg, var(--brand-accent-dark), var(--brand-accent))",
                     border: "none",
                     borderRadius: 10,
                     color: "white",
@@ -2272,10 +2270,15 @@ export default function BookingsPage() {
       )}
 
       <style>{`
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+        * { 
+        box-sizing: border-box; 
+        margin: 0; 
+        padding: 0; 
+        background: var(--background);
+        }
         input[type=number]::-webkit-outer-spin-button,
         input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
-        select option { background: white; color: #1a2744; }
+        select option { background: var(--background); color: var(--brand-text); }
       `}</style>
     </div>
   );
