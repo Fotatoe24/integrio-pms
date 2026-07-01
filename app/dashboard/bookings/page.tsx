@@ -197,10 +197,12 @@ export default function BookingsPage() {
     setForm(updated);
 
     if (updated.propertyId && updated.checkIn && updated.checkOut) {
+      // in handleFormChange
       const warning = checkConflict(
         updated.propertyId,
         updated.checkIn,
         updated.checkOut,
+        updated.stayType,
         editingId ?? undefined
       );
       setConflictWarning(warning);
@@ -211,12 +213,15 @@ export default function BookingsPage() {
     propertyId: string,
     checkIn: string,
     checkOut: string,
+    newStayType: string,
     excludeId?: string
   ) {
     if (!propertyId || !checkIn || !checkOut) return "";
     const newIn = new Date(checkIn).getTime();
     const newOut = new Date(checkOut).getTime();
-    const conflict = bookings.find((b) => {
+    const newIsLong = newStayType.includes("Long");
+
+    const overlapping = bookings.filter((b) => {
       if (b.id === excludeId) return false;
       if (b.propertyId !== propertyId) return false;
       if (b.status === "CANCELLED" || b.status === "CHECKED_OUT") return false;
@@ -224,10 +229,19 @@ export default function BookingsPage() {
       const bOut = new Date(b.checkOut).getTime();
       return newIn < bOut && newOut > bIn;
     });
-    if (conflict) {
-      return `⚠️ Conflict with ${conflict.guestName} (${new Date(
-        conflict.checkIn
-      ).toLocaleDateString("en-PH", {
+
+    if (overlapping.length === 0) return "";
+
+    const existingHasLong = overlapping.some((b) =>
+      (b.stayType || "").includes("Long")
+    );
+
+    // Day Long blocks the whole day — conflict if anything overlaps at all
+    if (newIsLong || existingHasLong) {
+      const conflict = overlapping[0];
+      return `⚠️ Fully booked — conflicts with ${
+        conflict.guestName
+      } (${new Date(conflict.checkIn).toLocaleDateString("en-PH", {
         month: "short",
         day: "numeric",
       })} – ${new Date(conflict.checkOut).toLocaleDateString("en-PH", {
@@ -235,6 +249,13 @@ export default function BookingsPage() {
         day: "numeric",
       })})`;
     }
+
+    // Two short stays can coexist; a third cannot
+    if (overlapping.length >= 2) {
+      return `⚠️ Fully booked — 2 short-stay bookings already exist for these dates`;
+    }
+
+    // exactly 1 short-stay overlap: this is allowed (Partial → still bookable)
     return "";
   }
 
@@ -325,10 +346,12 @@ export default function BookingsPage() {
     setSaving(true);
     setError("");
 
+    // in handleSave
     const conflict = checkConflict(
       form.propertyId,
       form.checkIn,
       form.checkOut,
+      form.stayType,
       editingId ?? undefined
     );
     if (conflict && form.status !== "CANCELLED") {
@@ -371,7 +394,10 @@ export default function BookingsPage() {
         .update(bookingPayload)
         .eq("id", editingId);
       if (error) {
-        setError(error.message);
+        const msg = error.message.includes("Booking conflict")
+          ? "This unit was just booked for these dates by someone else. Please refresh and try again."
+          : error.message;
+        setError(msg);
         setSaving(false);
         return;
       }
