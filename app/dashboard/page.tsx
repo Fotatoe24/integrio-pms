@@ -171,7 +171,7 @@ export default function DashboardPage() {
           style={{
             fontSize: 16,
             fontWeight: 700,
-            color: "#1a2744",
+            color: "var(--brand-text)",
             marginBottom: 16,
           }}
         >
@@ -182,7 +182,7 @@ export default function DashboardPage() {
             {
               label: "+ Add Property",
               href: "/dashboard/properties",
-              bg: "#1a2744",
+              bg: "var(--brand-text)",
             },
             {
               label: "+ New Booking",
