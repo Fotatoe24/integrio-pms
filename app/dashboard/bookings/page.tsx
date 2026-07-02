@@ -108,6 +108,7 @@ export default function BookingsPage() {
   const [expandedPayments, setExpandedPayments] = useState<string | null>(null);
   const [conflictWarning, setConflictWarning] = useState("");
   const [nightCleaning, setNightCleaning] = useState(false);
+  const [alternateUnits, setAlternateUnits] = useState<Property[]>([]);
 
   const [form, setForm] = useState({
     propertyId: "",
@@ -158,7 +159,7 @@ export default function BookingsPage() {
       supabase
         .from("Booking")
         .select(
-          "*, Property(name), Payment(id, type, amount, status, paidAt, method, receivedBy)"
+          "*, Property(name), Payment(id, type, amount, status, paidAt, method, receivedBy)",
         )
         .order("checkIn", { ascending: false }),
       supabase.from("Property").select("id, name"),
@@ -208,7 +209,7 @@ export default function BookingsPage() {
     const end = new Date(checkOut);
     const nightsCount = Math.max(
       1,
-      Math.round((end.getTime() - start.getTime()) / 86400000)
+      Math.round((end.getTime() - start.getTime()) / 86400000),
     );
 
     // Sum the per-night rate for each night in the stay, respecting weekday/weekend pricing
@@ -236,7 +237,7 @@ export default function BookingsPage() {
       const rateFields = applyStayType(
         updated.stayType,
         updated.checkIn,
-        updated.checkOut
+        updated.checkOut,
       );
       Object.assign(updated, rateFields);
     }
@@ -252,20 +253,30 @@ export default function BookingsPage() {
         updated.stayType,
         updated.checkInTime,
         updated.checkOutTime,
-        editingId ?? undefined
+        editingId ?? undefined,
       );
       setConflictWarning(warning);
+
+      const others = getAvailableUnits(
+        updated.checkIn,
+        updated.checkOut,
+        updated.stayType,
+        updated.checkInTime,
+        updated.checkOutTime,
+        editingId ?? undefined,
+      ).filter((p) => p.id !== updated.propertyId);
+      setAlternateUnits(others);
     }
   }
 
-  function checkConflict(
+  function unitConflict(
     propertyId: string,
     checkIn: string,
     checkOut: string,
     newStayType: string,
     newCheckInTime: string,
     newCheckOutTime: string,
-    excludeId?: string
+    excludeId?: string,
   ) {
     if (!propertyId || !checkIn || !checkOut) return "";
     const newIn = parseDateTime(checkIn, newCheckInTime);
@@ -284,7 +295,56 @@ export default function BookingsPage() {
     if (overlapping.length === 0) return "";
 
     const existingHasLong = overlapping.some((b) =>
-      (b.stayType || "").includes("Long")
+      (b.stayType || "").includes("Long"),
+    );
+
+    if (newIsLong || existingHasLong) {
+      const conflict = overlapping[0];
+      return `⚠️ Conflicts with ${conflict.guestName} (${new Date(
+        conflict.checkIn,
+      ).toLocaleDateString("en-PH", {
+        month: "short",
+        day: "numeric",
+      })} – ${new Date(conflict.checkOut).toLocaleDateString("en-PH", {
+        month: "short",
+        day: "numeric",
+      })})`;
+    }
+
+    if (overlapping.length >= 2) {
+      return `⚠️ 2 short-stay bookings already exist for these dates`;
+    }
+
+    return "";
+  }
+
+  function checkConflict(
+    propertyId: string,
+    checkIn: string,
+    checkOut: string,
+    newStayType: string,
+    newCheckInTime: string,
+    newCheckOutTime: string,
+    excludeId?: string,
+  ) {
+    if (!propertyId || !checkIn || !checkOut) return "";
+    const newIn = parseDateTime(checkIn, newCheckInTime);
+    const newOut = parseDateTime(checkOut, newCheckOutTime);
+    const newIsLong = newStayType.includes("Long");
+
+    const overlapping = bookings.filter((b) => {
+      if (b.id === excludeId) return false;
+      if (b.propertyId !== propertyId) return false;
+      if (b.status === "CANCELLED" || b.status === "CHECKED_OUT") return false;
+      const bIn = parseDateTime(b.checkIn, b.checkInTime);
+      const bOut = parseDateTime(b.checkOut, b.checkOutTime);
+      return newIn < bOut && newOut > bIn;
+    });
+
+    if (overlapping.length === 0) return "";
+
+    const existingHasLong = overlapping.some((b) =>
+      (b.stayType || "").includes("Long"),
     );
 
     if (newIsLong || existingHasLong) {
@@ -305,6 +365,29 @@ export default function BookingsPage() {
     }
 
     return "";
+  }
+
+  function getAvailableUnits(
+    checkIn: string,
+    checkOut: string,
+    stayType: string,
+    checkInTime: string,
+    checkOutTime: string,
+    excludeId?: string,
+  ) {
+    if (!checkIn || !checkOut) return [];
+    return properties.filter(
+      (p) =>
+        unitConflict(
+          p.id,
+          checkIn,
+          checkOut,
+          stayType,
+          checkInTime,
+          checkOutTime,
+          excludeId,
+        ) === "",
+    );
   }
 
   function openAdd() {
@@ -408,7 +491,7 @@ export default function BookingsPage() {
       form.stayType,
       form.checkInTime,
       form.checkOutTime,
-      editingId ?? undefined
+      editingId ?? undefined,
     );
     if (conflict && form.status !== "CANCELLED") {
       setError(conflict);
@@ -560,7 +643,7 @@ export default function BookingsPage() {
 
   function nights(checkIn: string, checkOut: string) {
     return Math.round(
-      (new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 86400000
+      (new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 86400000,
     );
   }
 
@@ -579,11 +662,11 @@ export default function BookingsPage() {
       (b) =>
         b.propertyId === form.propertyId &&
         b.status !== "CANCELLED" &&
-        b.id !== editingId
+        b.id !== editingId,
     )
     .filter((b) => new Date(b.checkOut) >= new Date())
     .sort(
-      (a, b) => new Date(a.checkIn).getTime() - new Date(b.checkIn).getTime()
+      (a, b) => new Date(a.checkIn).getTime() - new Date(b.checkIn).getTime(),
     )
     .slice(0, 5);
 
@@ -1091,14 +1174,14 @@ export default function BookingsPage() {
                           label: "Check-in",
                           val: `${new Date(b.checkIn).toLocaleDateString(
                             "en-PH",
-                            { month: "short", day: "numeric", year: "numeric" }
+                            { month: "short", day: "numeric", year: "numeric" },
                           )} ${b.checkInTime || ""}`,
                         },
                         {
                           label: "Check-out",
                           val: `${new Date(b.checkOut).toLocaleDateString(
                             "en-PH",
-                            { month: "short", day: "numeric", year: "numeric" }
+                            { month: "short", day: "numeric", year: "numeric" },
                           )} ${b.checkOutTime || ""}`,
                         },
                         {
@@ -1299,7 +1382,7 @@ export default function BookingsPage() {
                                           month: "short",
                                           day: "numeric",
                                           year: "numeric",
-                                        }
+                                        },
                                       )}
                                     </span>
                                   )}
@@ -1701,7 +1784,7 @@ export default function BookingsPage() {
                                   weekday: "short",
                                   month: "short",
                                   day: "numeric",
-                                }
+                                },
                               )}
                             </span>
                             <div
@@ -1768,6 +1851,44 @@ export default function BookingsPage() {
                   {conflictWarning}
                 </div>
               )}
+
+              {alternateUnits.length > 0 && (
+  <div
+    style={{
+      background: "#eef9f4",
+      border: "1px solid #b7e4c7",
+      borderRadius: 8,
+      padding: "12px 14px",
+    }}
+  >
+    <div style={{ fontSize: 12, fontWeight: 700, color: "#1b7a4a", marginBottom: 8 }}>
+      {conflictWarning
+        ? "This unit is booked — other units free for these dates:"
+        : "Also available for these dates:"}
+    </div>
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+      {alternateUnits.map((p) => (
+        <button
+          key={p.id}
+          type="button"
+          onClick={() => handleFormChange({ propertyId: p.id })}
+          style={{
+            padding: "6px 12px",
+            borderRadius: 20,
+            fontSize: 12,
+            fontWeight: 600,
+            border: "1.5px solid #b7e4c7",
+            background: "var(--background)",
+            color: "#1b7a4a",
+            cursor: "pointer",
+          }}
+        >
+          {p.name} →
+        </button>
+      ))}
+    </div>
+  </div>
+)}
 
               {/* No conflict indicator */}
               {!conflictWarning && form.checkIn && form.checkOut && (
@@ -2331,8 +2452,8 @@ export default function BookingsPage() {
                   {saving
                     ? "Saving..."
                     : editingId
-                    ? "Update Booking"
-                    : "Create Booking"}
+                      ? "Update Booking"
+                      : "Create Booking"}
                 </button>
               </div>
             </form>
