@@ -90,65 +90,20 @@ export default function SettingsPage() {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 10,
-              background: "linear-gradient(135deg, #1a2744, #2cb5b0)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <svg width="18" height="18" viewBox="0 0 28 28" fill="none">
-              <rect
-                x="2"
-                y="2"
-                width="10"
-                height="10"
-                rx="2"
-                fill="white"
-                opacity="0.9"
-              />
-              <rect
-                x="16"
-                y="2"
-                width="10"
-                height="10"
-                rx="2"
-                fill="white"
-                opacity="0.5"
-              />
-              <rect
-                x="2"
-                y="16"
-                width="10"
-                height="10"
-                rx="2"
-                fill="white"
-                opacity="0.5"
-              />
-              <rect
-                x="16"
-                y="16"
-                width="10"
-                height="10"
-                rx="2"
-                fill="white"
-                opacity="0.9"
-              />
-            </svg>
-          </div>
-          <span
-            style={{
-              fontSize: 16,
-              fontWeight: 700,
-              color: "var(--brand-text, #1a2744)",
-            }}
-          >
-            Integrio
-          </span>
+          {/* Logo — swaps with theme via Tailwind's dark: variant */}
+          <img
+            src="/blacklogo.png"
+            alt="Integrio"
+            className="w-20 sm:w-20 h-auto block dark:hidden"
+            style={{ filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.25))" }}
+          />
+          <img
+            src="/darktrans.png"
+            alt="Integrio"
+            className="w-20 sm:w-20 h-auto hidden dark:block"
+            style={{ filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.25))" }}
+          />
+
           <span
             style={{
               fontSize: 12,

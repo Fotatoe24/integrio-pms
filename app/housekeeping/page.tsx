@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { requireRole, IntegrioUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
@@ -48,6 +48,12 @@ export default function HousekeepingPage() {
   const [editContent, setEditContent] = useState("");
   const [editCategory, setEditCategory] = useState("general");
   const [editAmount, setEditAmount] = useState("");
+
+  // Filters
+  const [filterCategory, setFilterCategory] = useState("all");
+  const [filterSearch, setFilterSearch] = useState("");
+  const [filterDateFrom, setFilterDateFrom] = useState("");
+  const [filterDateTo, setFilterDateTo] = useState("");
 
   useEffect(() => {
     document.title = "Housekeeping — Integrio";
@@ -141,7 +147,54 @@ export default function HousekeepingPage() {
     window.location.href = "/login";
   }
 
-  const totalAmount = notes.reduce((sum, n) => sum + Number(n.amount || 0), 0);
+  const hasActiveFilters =
+    filterCategory !== "all" ||
+    filterSearch.trim() !== "" ||
+    filterDateFrom !== "" ||
+    filterDateTo !== "";
+
+  function clearFilters() {
+    setFilterCategory("all");
+    setFilterSearch("");
+    setFilterDateFrom("");
+    setFilterDateTo("");
+  }
+
+  const filteredNotes = useMemo(() => {
+    return notes.filter((note) => {
+      if (filterCategory !== "all" && note.category !== filterCategory) {
+        return false;
+      }
+
+      if (
+        filterSearch.trim() &&
+        !note.content.toLowerCase().includes(filterSearch.trim().toLowerCase())
+      ) {
+        return false;
+      }
+
+      const noteDate = new Date(note.createdAt);
+
+      if (filterDateFrom) {
+        const from = new Date(filterDateFrom);
+        from.setHours(0, 0, 0, 0);
+        if (noteDate < from) return false;
+      }
+
+      if (filterDateTo) {
+        const to = new Date(filterDateTo);
+        to.setHours(23, 59, 59, 999);
+        if (noteDate > to) return false;
+      }
+
+      return true;
+    });
+  }, [notes, filterCategory, filterSearch, filterDateFrom, filterDateTo]);
+
+  const totalAmount = filteredNotes.reduce(
+    (sum, n) => sum + Number(n.amount || 0),
+    0
+  );
 
   if (!user) return null;
 
@@ -149,14 +202,14 @@ export default function HousekeepingPage() {
     <div
       style={{
         minHeight: "100vh",
-        background: "#f0f4f8",
+        background: "var(--brand-bg, #f8f9fa)",
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
       }}
     >
       {/* Header */}
       <div
         style={{
-          background: "white",
+          background: "var(--brand-surface, #f8f9fa)",
           borderBottom: "1px solid #e8edf3",
           padding: "0 32px",
           height: 64,
@@ -169,11 +222,17 @@ export default function HousekeepingPage() {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          {/* Logo */}
+          {/* Logo — swaps with theme via Tailwind's dark: variant */}
           <img
-            src="./blacklogo.png"
+            src="/blacklogo.png"
             alt="Integrio"
-            className="w-20 sm:w-20 h-auto"
+            className="w-20 sm:w-20 h-auto block dark:hidden"
+            style={{ filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.25))" }}
+          />
+          <img
+            src="/darktrans.png"
+            alt="Integrio"
+            className="w-20 sm:w-20 h-auto hidden dark:block"
             style={{ filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.25))" }}
           />
 
@@ -191,24 +250,11 @@ export default function HousekeepingPage() {
           </span>
         </div>
 
-        <a
-          href="/settings"
-          style={{
-            fontSize: 13,
-            color: "#8896a5",
-            border: "1.5px solid #e8edf3",
-            borderRadius: 8,
-            padding: "6px 14px",
-            textDecoration: "none",
-          }}
-        >
-          Settings
-        </a>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <span style={{ fontSize: 13, color: "#8896a5" }}>{user.name}</span>
 
           <a
-            href="/change-password"
+            href="/settings"
             style={{
               fontSize: 13,
               color: "#8896a5",
@@ -218,7 +264,7 @@ export default function HousekeepingPage() {
               textDecoration: "none",
             }}
           >
-            Change password
+            Settings
           </a>
           <button
             onClick={logout}
@@ -246,14 +292,16 @@ export default function HousekeepingPage() {
             style={{
               fontSize: 24,
               fontWeight: 700,
-              color: "#1a2744",
+              color: "var(--bra-text)",
               marginBottom: 4,
             }}
           >
             Expense Notes
           </h1>
           <p style={{ color: "#8896a5", fontSize: 14 }}>
-            {notes.length} {notes.length === 1 ? "entry" : "entries"} · Total: ₱
+            {filteredNotes.length}{" "}
+            {filteredNotes.length === 1 ? "entry" : "entries"}
+            {hasActiveFilters ? ` of ${notes.length}` : ""} · Total: ₱
             {totalAmount.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
           </p>
         </div>
@@ -261,7 +309,7 @@ export default function HousekeepingPage() {
         {/* Add note card */}
         <div
           style={{
-            background: "white",
+            background: "var(--accent, white)",
             borderRadius: 16,
             boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
             padding: "24px",
@@ -292,7 +340,7 @@ export default function HousekeepingPage() {
               border: "1.5px solid #e8edf3",
               borderRadius: 10,
               fontSize: 14,
-              color: "#1a2744",
+              color: "var(--brand-text)",
               outline: "none",
               resize: "vertical",
               fontFamily: "inherit",
@@ -319,8 +367,8 @@ export default function HousekeepingPage() {
                 border: "1.5px solid #e8edf3",
                 borderRadius: 8,
                 fontSize: 13,
-                color: "#1a2744",
-                background: "white",
+                color: "#var(--brand-text)",
+                background: "var(--accent, white)",
                 outline: "none",
                 cursor: "pointer",
               }}
@@ -340,10 +388,12 @@ export default function HousekeepingPage() {
                 borderRadius: 8,
                 padding: "0 12px",
                 gap: 4,
-                background: "white",
+                background: "var(--accent, white)",
               }}
             >
-              <span style={{ fontSize: 13, color: "#8896a5" }}>₱</span>
+              <span style={{ fontSize: 13, color: "var(--brand-text-muted)" }}>
+                ₱
+              </span>
               <input
                 type="number"
                 min="0"
@@ -355,7 +405,7 @@ export default function HousekeepingPage() {
                   border: "none",
                   outline: "none",
                   fontSize: 14,
-                  color: "#1a2744",
+                  color: "var(--brand-text)",
                   width: 90,
                   padding: "9px 0",
                   fontFamily: "inherit",
@@ -409,6 +459,143 @@ export default function HousekeepingPage() {
           </div>
         </div>
 
+        {/* Filter card */}
+        <div
+          style={{
+            background: "var(--accent, white)",
+            borderRadius: 16,
+            boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+            padding: "20px 24px",
+            marginBottom: 24,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: 14,
+            }}
+          >
+            <span
+              style={{
+                fontSize: 12,
+                fontWeight: 600,
+                color: "#8896a5",
+                textTransform: "uppercase",
+                letterSpacing: "0.06em",
+              }}
+            >
+              Filters
+            </span>
+            {hasActiveFilters && (
+              <button
+                onClick={clearFilters}
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: "#2cb5b0",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: 0,
+                }}
+              >
+                Clear all
+              </button>
+            )}
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              gap: 10,
+              flexWrap: "wrap",
+              alignItems: "center",
+            }}
+          >
+            <input
+              type="text"
+              placeholder="Search notes..."
+              value={filterSearch}
+              onChange={(e) => setFilterSearch(e.target.value)}
+              style={{
+                flex: "1 1 180px",
+                padding: "9px 12px",
+                border: "1.5px solid #e8edf3",
+                borderRadius: 8,
+                fontSize: 13,
+                color: "var(--brand-text)",
+                background: "var(--accent, white)",
+                outline: "none",
+                fontFamily: "inherit",
+              }}
+            />
+
+            <select
+              value={filterCategory}
+              onChange={(e) => setFilterCategory(e.target.value)}
+              style={{
+                padding: "9px 12px",
+                border: "1.5px solid #e8edf3",
+                borderRadius: 8,
+                fontSize: 13,
+                color: "var(--brand-text)",
+                background: "var(--accent, white)",
+                outline: "none",
+                cursor: "pointer",
+              }}
+            >
+              <option value="all">All categories</option>
+              {CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {c.charAt(0).toUpperCase() + c.slice(1)}
+                </option>
+              ))}
+            </select>
+
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
+              <input
+                type="date"
+                value={filterDateFrom}
+                onChange={(e) => setFilterDateFrom(e.target.value)}
+                style={{
+                  padding: "8px 10px",
+                  border: "1.5px solid #e8edf3",
+                  borderRadius: 8,
+                  fontSize: 13,
+                  color: "var(--brand-text)",
+                  background: "var(--accent, white)",
+                  outline: "none",
+                  fontFamily: "inherit",
+                }}
+              />
+              <span style={{ fontSize: 12, color: "#8896a5" }}>to</span>
+              <input
+                type="date"
+                value={filterDateTo}
+                onChange={(e) => setFilterDateTo(e.target.value)}
+                style={{
+                  padding: "8px 10px",
+                  border: "1.5px solid #e8edf3",
+                  borderRadius: 8,
+                  fontSize: 13,
+                  color: "var(--brand-text)",
+                  background: "var(--accent, white)",
+                  outline: "none",
+                  fontFamily: "inherit",
+                }}
+              />
+            </div>
+          </div>
+        </div>
+
         {/* Feed label */}
         <div
           style={{
@@ -437,10 +624,10 @@ export default function HousekeepingPage() {
           <div style={{ textAlign: "center", padding: 60, color: "#8896a5" }}>
             Loading notes...
           </div>
-        ) : notes.length === 0 ? (
+        ) : filteredNotes.length === 0 ? (
           <div
             style={{
-              background: "white",
+              background: "var(--accent, white)",
               borderRadius: 16,
               padding: 60,
               textAlign: "center",
@@ -448,18 +635,22 @@ export default function HousekeepingPage() {
             }}
           >
             <div style={{ fontSize: 48, marginBottom: 16 }}>🧹</div>
-            <h3 style={{ color: "#1a2744", marginBottom: 8 }}>No notes yet</h3>
-            <p style={{ color: "#8896a5", fontSize: 14 }}>
-              Add your first expense note above.
+            <h3 style={{ color: "var(--brand-text)", marginBottom: 8 }}>
+              {hasActiveFilters ? "No matching notes" : "No notes yet"}
+            </h3>
+            <p style={{ color: "var(--brand-text-muted)", fontSize: 14 }}>
+              {hasActiveFilters
+                ? "Try adjusting or clearing your filters."
+                : "Add your first expense note above."}
             </p>
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {notes.map((note) => (
+            {filteredNotes.map((note) => (
               <div
                 key={note.id}
                 style={{
-                  background: "white",
+                  background: "var(--accent, white)",
                   borderRadius: 16,
                   boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
                   padding: "20px 24px",
@@ -486,7 +677,7 @@ export default function HousekeepingPage() {
                         border: "1.5px solid #2cb5b0",
                         borderRadius: 10,
                         fontSize: 14,
-                        color: "#1a2744",
+                        color: "var(--brand-text)",
                         outline: "none",
                         resize: "vertical",
                         fontFamily: "inherit",
@@ -508,8 +699,8 @@ export default function HousekeepingPage() {
                           border: "1.5px solid #e8edf3",
                           borderRadius: 8,
                           fontSize: 13,
-                          color: "#1a2744",
-                          background: "white",
+                          color: "var(--brand-text)",
+                          background: "var(--brand-surface)",
                           outline: "none",
                         }}
                       >
@@ -529,7 +720,12 @@ export default function HousekeepingPage() {
                           gap: 4,
                         }}
                       >
-                        <span style={{ fontSize: 13, color: "#8896a5" }}>
+                        <span
+                          style={{
+                            fontSize: 13,
+                            color: "var(--brand-text-muted)",
+                          }}
+                        >
                           ₱
                         </span>
                         <input
@@ -542,7 +738,7 @@ export default function HousekeepingPage() {
                             border: "none",
                             outline: "none",
                             fontSize: 14,
-                            color: "#1a2744",
+                            color: "var(--brand-text)",
                             width: 90,
                             padding: "8px 0",
                             fontFamily: "inherit",
@@ -558,8 +754,8 @@ export default function HousekeepingPage() {
                             padding: "7px 16px",
                             border: "1.5px solid #e8edf3",
                             borderRadius: 8,
-                            background: "white",
-                            color: "#8896a5",
+                            background: "var(--brand-surface)",
+                            color: "var(--brand-text)",
                             fontSize: 13,
                             fontWeight: 600,
                             cursor: "pointer",
@@ -617,7 +813,7 @@ export default function HousekeepingPage() {
                             marginLeft: "auto",
                             fontSize: 16,
                             fontWeight: 700,
-                            color: "#1a2744",
+                            color: "var(--brand-text)",
                           }}
                         >
                           ₱
@@ -632,7 +828,7 @@ export default function HousekeepingPage() {
                       style={{
                         fontSize: 14,
                         lineHeight: 1.65,
-                        color: "#1a2744",
+                        color: "var(--brand-text)",
                         marginBottom: 14,
                         whiteSpace: "pre-wrap",
                       }}
@@ -659,8 +855,8 @@ export default function HousekeepingPage() {
                             fontSize: 12,
                             fontWeight: 600,
                             border: "1.5px solid #e8edf3",
-                            background: "white",
-                            color: "#1a2744",
+                            background: "var(--brand-surface)",
+                            color: "var(--brand-text)",
                             cursor: "pointer",
                           }}
                         >

@@ -437,20 +437,20 @@ export default function OwnerPage() {
   const inputStyle: React.CSSProperties = {
     width: "100%",
     padding: "11px 14px",
-    border: "1.5px solid #23232b",
+    border: "1.5px solid var(--brand-border)",
     borderRadius: 10,
     fontSize: 14,
-    color: "#f5f5f7",
+    color: "var(--brand-text)",
     outline: "none",
     fontFamily: "inherit",
-    background: "#15151a",
+    background: "var(--brand-surface)",
   };
 
   const labelStyle: React.CSSProperties = {
     display: "block",
     fontSize: 12,
     fontWeight: 600,
-    color: "#9a9aa5",
+    color: "var(--brand-text-muted)",
     textTransform: "uppercase",
     letterSpacing: "0.06em",
     marginBottom: 8,
@@ -462,15 +462,15 @@ export default function OwnerPage() {
     <div
       style={{
         minHeight: "100vh",
-        background: "#0a0a0c",
+        background: "var(--brand-bg)",
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
       }}
     >
       {/* Header */}
       <div
         style={{
-          background: "#0a0a0c",
-          borderBottom: "1px solid #1c1c22",
+          background: "var(--brand-surface)",
+          borderBottom: "1px solid var(--brand-border)",
           padding: "0 32px",
           height: 64,
           display: "flex",
@@ -482,11 +482,17 @@ export default function OwnerPage() {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          {/* Logo */}
+          {/* Logo — swaps with theme via Tailwind's dark: variant */}
           <img
-            src="./darktrans.png"
+            src="/blacklogo.png"
             alt="Integrio"
-            className="w-20 sm:w-20 h-auto"
+            className="w-20 sm:w-20 h-auto block dark:hidden"
+            style={{ filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.25))" }}
+          />
+          <img
+            src="/darktrans.png"
+            alt="Integrio"
+            className="w-20 sm:w-20 h-auto hidden dark:block"
             style={{ filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.25))" }}
           />
 
@@ -494,9 +500,9 @@ export default function OwnerPage() {
             style={{
               fontSize: 12,
               fontWeight: 600,
-              background: "#1c1c22",
-              color: "#c7c7cf",
-              border: "1px solid #2a2a33",
+              background: "var(--brand-surface)",
+              color: "var(--brand-text-muted)",
+              border: "1px solid var(--brand-border)",
               borderRadius: 20,
               padding: "3px 10px",
             }}
@@ -505,43 +511,31 @@ export default function OwnerPage() {
           </span>
         </div>
 
-        <a
-          href="/settings"
-          style={{
-            fontSize: 13,
-            color: "#8896a5",
-            border: "1.5px solid #e8edf3",
-            borderRadius: 8,
-            padding: "6px 14px",
-            textDecoration: "none",
-          }}
-        >
-          Settings
-        </a>
-
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <span style={{ fontSize: 13, color: "#9a9aa5" }}>{user.name}</span>
+          <span style={{ fontSize: 13, color: "var(--brand-text)" }}>
+            {user.name}
+          </span>
 
           <a
-            href="/change-password"
+            href="/settings"
             style={{
               fontSize: 13,
-              color: "#9a9aa5",
-              border: "1.5px solid #23232b",
+              color: "var(--brand-text)",
+              border: "1.5px solid var(--brand-border)",
               borderRadius: 8,
               padding: "6px 14px",
               textDecoration: "none",
             }}
           >
-            Change password
+            Settings
           </a>
           <button
             onClick={logout}
             style={{
               fontSize: 13,
-              color: "#9a9aa5",
+              color: "var(--brand-text-muted)",
               background: "none",
-              border: "1.5px solid #23232b",
+              border: "1.5px solid var(--brand-border)",
               borderRadius: 8,
               padding: "6px 14px",
               cursor: "pointer",
@@ -569,13 +563,13 @@ export default function OwnerPage() {
               style={{
                 fontSize: 24,
                 fontWeight: 700,
-                color: "#f5f5f7",
+                color: "var(--brand-text)",
                 marginBottom: 4,
               }}
             >
               Owner Dashboard
             </h1>
-            <p style={{ color: "#9a9aa5", fontSize: 14 }}>
+            <p style={{ color: "var(--brand-text-muted)", fontSize: 14 }}>
               Full visibility across all operations
             </p>
           </div>
@@ -607,7 +601,13 @@ export default function OwnerPage() {
         </div>
 
         {loading ? (
-          <div style={{ textAlign: "center", padding: 80, color: "#9a9aa5" }}>
+          <div
+            style={{
+              textAlign: "center",
+              padding: 80,
+              color: "var(--brand-text-muted)",
+            }}
+          >
             Loading...
           </div>
         ) : (
@@ -624,8 +624,8 @@ export default function OwnerPage() {
               {/* Net income hero */}
               <div
                 style={{
-                  background: "#15151a",
-                  border: "1px solid #1f1f26",
+                  background: "var(--brand-surface)",
+                  border: "1px solid var(--brand-border)",
                   borderRadius: 16,
                   padding: "28px 28px",
                   display: "flex",
@@ -640,7 +640,7 @@ export default function OwnerPage() {
                     style={{
                       fontSize: 11,
                       fontWeight: 600,
-                      color: "#7a7a82",
+                      color: "var(--brand-text-muted)",
                       textTransform: "uppercase",
                       letterSpacing: "0.06em",
                       marginBottom: 12,
@@ -652,7 +652,7 @@ export default function OwnerPage() {
                     style={{
                       fontSize: 36,
                       fontWeight: 700,
-                      color: "#f5f5f7",
+                      color: "var(--brand-text)",
                       marginBottom: 6,
                       lineHeight: 1.1,
                     }}
@@ -662,7 +662,9 @@ export default function OwnerPage() {
                       minimumFractionDigits: 2,
                     })}
                   </div>
-                  <div style={{ fontSize: 13, color: "#8b8b95" }}>
+                  <div
+                    style={{ fontSize: 13, color: "var(--brand-text-muted)" }}
+                  >
                     Income minus expenses
                   </div>
                 </div>
@@ -677,7 +679,7 @@ export default function OwnerPage() {
                         style={{
                           fontSize: 11,
                           fontWeight: 600,
-                          color: "#7a7a82",
+                          color: "var(--brand-text-muted)",
                           textTransform: "uppercase",
                           letterSpacing: "0.06em",
                           marginBottom: 8,
@@ -689,7 +691,7 @@ export default function OwnerPage() {
                         style={{
                           fontSize: 17,
                           fontWeight: 700,
-                          color: "#f5f5f7",
+                          color: "var(--brand-text)",
                         }}
                       >
                         ₱{item.value.toLocaleString("en-PH")}
@@ -702,8 +704,8 @@ export default function OwnerPage() {
               {/* Collection progress */}
               <div
                 style={{
-                  background: "#15151a",
-                  border: "1px solid #1f1f26",
+                  background: "var(--brand-surface)",
+                  border: "1px solid var(--brand-border)",
                   borderRadius: 16,
                   padding: "22px 28px",
                 }}
@@ -717,12 +719,20 @@ export default function OwnerPage() {
                   }}
                 >
                   <span
-                    style={{ fontSize: 14, fontWeight: 600, color: "#d4d4db" }}
+                    style={{
+                      fontSize: 14,
+                      fontWeight: 600,
+                      color: "var(--brand-text)",
+                    }}
                   >
                     Collection progress
                   </span>
                   <span
-                    style={{ fontSize: 13, fontWeight: 700, color: "#f5f5f7" }}
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 700,
+                      color: "var(--brand-text)",
+                    }}
                   >
                     {collectionPct}% collected
                   </span>
@@ -731,7 +741,7 @@ export default function OwnerPage() {
                   style={{
                     height: 8,
                     borderRadius: 8,
-                    background: "#23232b",
+                    background: "var(--brand-border)",
                     overflow: "hidden",
                   }}
                 >
@@ -751,7 +761,7 @@ export default function OwnerPage() {
                     justifyContent: "space-between",
                     marginTop: 10,
                     fontSize: 12,
-                    color: "#8b8b95",
+                    color: "var(--brand-text-muted)",
                   }}
                 >
                   <span>
@@ -801,8 +811,8 @@ export default function OwnerPage() {
                   <div
                     key={s.label}
                     style={{
-                      background: "#15151a",
-                      border: "1px solid #1f1f26",
+                      background: "var(--brand-surface)",
+                      border: "1px solid var(--brand-border)",
                       borderRadius: 16,
                       padding: "18px 20px",
                       display: "flex",
@@ -816,13 +826,18 @@ export default function OwnerPage() {
                         style={{
                           fontSize: 22,
                           fontWeight: 700,
-                          color: "#f5f5f7",
+                          color: "var(--brand-text)",
                           lineHeight: 1.1,
                         }}
                       >
                         {s.value}
                       </div>
-                      <div style={{ fontSize: 12, color: "#8b8b95" }}>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          color: "var(--brand-text-muted)",
+                        }}
+                      >
                         {s.label}
                       </div>
                     </div>
@@ -849,9 +864,18 @@ export default function OwnerPage() {
                     borderRadius: 20,
                     fontSize: 13,
                     fontWeight: 600,
-                    border: activeTab === tab ? "none" : "1.5px solid #23232b",
-                    background: activeTab === tab ? "#f5f5f7" : "#15151a",
-                    color: activeTab === tab ? "#0a0a0c" : "#9a9aa5",
+                    border:
+                      activeTab === tab
+                        ? "none"
+                        : "1.5px solid var(--brand-border)",
+                    background:
+                      activeTab === tab
+                        ? "var(--brand-text)"
+                        : "var(--brand-surface)",
+                    color:
+                      activeTab === tab
+                        ? "var(--background)"
+                        : "var(--brand-text-muted)",
                     cursor: "pointer",
                     transition: "all 0.2s",
                   }}
@@ -868,10 +892,10 @@ export default function OwnerPage() {
                 {/* Add receiver */}
                 <div
                   style={{
-                    background: "#15151a",
+                    background: "var(--brand-surface)",
                     borderRadius: 16,
                     boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
-                    border: "1px solid #1f1f26",
+                    border: "1px solid var(--brand-border)",
                     padding: "24px",
                   }}
                 >
@@ -879,7 +903,7 @@ export default function OwnerPage() {
                     style={{
                       fontSize: 12,
                       fontWeight: 600,
-                      color: "#9a9aa5",
+                      color: "var(--brand-text-muted)",
                       textTransform: "uppercase",
                       letterSpacing: "0.06em",
                       marginBottom: 14,
@@ -899,18 +923,20 @@ export default function OwnerPage() {
                       style={{
                         flex: 1,
                         padding: "11px 14px",
-                        border: "1.5px solid #23232b",
+                        border: "1.5px solid var(--brand-border)",
                         borderRadius: 10,
                         fontSize: 14,
-                        color: "#f5f5f7",
+                        color: "var(--brand-text)",
                         outline: "none",
                         fontFamily: "inherit",
                       }}
                       onFocus={(e) =>
-                        (e.currentTarget.style.borderColor = "#2cb5b0")
+                        (e.currentTarget.style.borderColor =
+                          "var(--brand-accent)")
                       }
                       onBlur={(e) =>
-                        (e.currentTarget.style.borderColor = "#23232b")
+                        (e.currentTarget.style.borderColor =
+                          "var(--brand-border)")
                       }
                     />
                     <button
@@ -919,11 +945,11 @@ export default function OwnerPage() {
                       style={{
                         background:
                           addingReceiver || !newReceiverName.trim()
-                            ? "#23232b"
+                            ? "var(--brand-border)"
                             : "linear-gradient(135deg, #1a2744, #2cb5b0)",
                         color:
                           addingReceiver || !newReceiverName.trim()
-                            ? "#8896a5"
+                            ? "var(--brand-text-muted)"
                             : "white",
                         border: "none",
                         borderRadius: 10,
@@ -949,19 +975,21 @@ export default function OwnerPage() {
                 {receivers.length === 0 ? (
                   <div
                     style={{
-                      background: "#15151a",
+                      background: "var(--brand-surface)",
                       borderRadius: 16,
                       padding: 60,
                       textAlign: "center",
                       boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
-                      border: "1px solid #1f1f26",
+                      border: "1px solid var(--brand-border)",
                     }}
                   >
                     <div style={{ fontSize: 48, marginBottom: 16 }}>💰</div>
-                    <h3 style={{ color: "#f5f5f7", marginBottom: 8 }}>
+                    <h3 style={{ color: "var(--brand-text)", marginBottom: 8 }}>
                       No receivers yet
                     </h3>
-                    <p style={{ color: "#9a9aa5", fontSize: 14 }}>
+                    <p
+                      style={{ color: "var(--brand-text-muted)", fontSize: 14 }}
+                    >
                       Add the people who collect payments.
                     </p>
                   </div>
@@ -977,10 +1005,10 @@ export default function OwnerPage() {
                       <div
                         key={r.id}
                         style={{
-                          background: "#15151a",
+                          background: "var(--brand-surface)",
                           borderRadius: 14,
                           boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
-                          border: "1px solid #1f1f26",
+                          border: "1px solid var(--brand-border)",
                           padding: "16px 24px",
                           display: "flex",
                           alignItems: "center",
@@ -1015,7 +1043,7 @@ export default function OwnerPage() {
                             style={{
                               fontSize: 15,
                               fontWeight: 600,
-                              color: "#f5f5f7",
+                              color: "var(--brand-text)",
                             }}
                           >
                             {r.name}
@@ -1055,10 +1083,10 @@ export default function OwnerPage() {
                 {/* Recent bookings */}
                 <div
                   style={{
-                    background: "#15151a",
+                    background: "var(--brand-surface)",
                     borderRadius: 16,
                     boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
-                    border: "1px solid #1f1f26",
+                    border: "1px solid var(--brand-border)",
                     padding: "20px 24px",
                   }}
                 >
@@ -1066,7 +1094,7 @@ export default function OwnerPage() {
                     style={{
                       fontSize: 13,
                       fontWeight: 700,
-                      color: "#f5f5f7",
+                      color: "var(--brand-text)",
                       marginBottom: 16,
                     }}
                   >
@@ -1080,7 +1108,7 @@ export default function OwnerPage() {
                         alignItems: "center",
                         justifyContent: "space-between",
                         padding: "10px 0",
-                        borderBottom: "1px solid #0a0a0c",
+                        borderBottom: "1px solid var(--background)",
                       }}
                     >
                       <div>
@@ -1088,12 +1116,17 @@ export default function OwnerPage() {
                           style={{
                             fontSize: 13,
                             fontWeight: 600,
-                            color: "#f5f5f7",
+                            color: "var(--brand-text)",
                           }}
                         >
                           {b.guestName}
                         </div>
-                        <div style={{ fontSize: 11, color: "#9a9aa5" }}>
+                        <div
+                          style={{
+                            fontSize: 11,
+                            color: "var(--brand-text-muted)",
+                          }}
+                        >
                           {b.Property?.name} · {formatDate(b.checkIn)}
                         </div>
                       </div>
@@ -1113,7 +1146,9 @@ export default function OwnerPage() {
                     </div>
                   ))}
                   {bookings.length === 0 && (
-                    <p style={{ fontSize: 13, color: "#9a9aa5" }}>
+                    <p
+                      style={{ fontSize: 13, color: "var(--brand-text-muted)" }}
+                    >
                       No bookings yet.
                     </p>
                   )}
@@ -1122,10 +1157,10 @@ export default function OwnerPage() {
                 {/* Recent expenses */}
                 <div
                   style={{
-                    background: "#15151a",
+                    background: "var(--brand-surface)",
                     borderRadius: 16,
                     boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
-                    border: "1px solid #1f1f26",
+                    border: "1px solid var(--brand-border)",
                     padding: "20px 24px",
                   }}
                 >
@@ -1133,7 +1168,7 @@ export default function OwnerPage() {
                     style={{
                       fontSize: 13,
                       fontWeight: 700,
-                      color: "#f5f5f7",
+                      color: "var(--brand-text)",
                       marginBottom: 16,
                     }}
                   >
@@ -1147,7 +1182,7 @@ export default function OwnerPage() {
                         alignItems: "center",
                         justifyContent: "space-between",
                         padding: "10px 0",
-                        borderBottom: "1px solid #0a0a0c",
+                        borderBottom: "1px solid var(--background)",
                       }}
                     >
                       <div style={{ flex: 1, minWidth: 0 }}>
@@ -1164,7 +1199,9 @@ export default function OwnerPage() {
                         >
                           {n.category}
                         </span>
-                        <span style={{ fontSize: 13, color: "#f5f5f7" }}>
+                        <span
+                          style={{ fontSize: 13, color: "var(--brand-text)" }}
+                        >
                           {n.content.slice(0, 35)}
                           {n.content.length > 35 ? "…" : ""}
                         </span>
@@ -1173,7 +1210,7 @@ export default function OwnerPage() {
                         style={{
                           fontSize: 13,
                           fontWeight: 600,
-                          color: "#f5f5f7",
+                          color: "var(--brand-text)",
                           whiteSpace: "nowrap",
                           marginLeft: 12,
                         }}
@@ -1186,7 +1223,9 @@ export default function OwnerPage() {
                     </div>
                   ))}
                   {expenseNotes.length === 0 && (
-                    <p style={{ fontSize: 13, color: "#9a9aa5" }}>
+                    <p
+                      style={{ fontSize: 13, color: "var(--brand-text-muted)" }}
+                    >
                       No expenses yet.
                     </p>
                   )}
@@ -1195,10 +1234,10 @@ export default function OwnerPage() {
                 {/* Recent payments */}
                 <div
                   style={{
-                    background: "#15151a",
+                    background: "var(--brand-surface)",
                     borderRadius: 16,
                     boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
-                    border: "1px solid #1f1f26",
+                    border: "1px solid var(--brand-border)",
                     padding: "20px 24px",
                   }}
                 >
@@ -1206,7 +1245,7 @@ export default function OwnerPage() {
                     style={{
                       fontSize: 13,
                       fontWeight: 700,
-                      color: "#f5f5f7",
+                      color: "var(--brand-text)",
                       marginBottom: 16,
                     }}
                   >
@@ -1220,7 +1259,7 @@ export default function OwnerPage() {
                         alignItems: "center",
                         justifyContent: "space-between",
                         padding: "10px 0",
-                        borderBottom: "1px solid #0a0a0c",
+                        borderBottom: "1px solid var(--background)",
                       }}
                     >
                       <div>
@@ -1228,12 +1267,17 @@ export default function OwnerPage() {
                           style={{
                             fontSize: 13,
                             fontWeight: 600,
-                            color: "#f5f5f7",
+                            color: "var(--brand-text)",
                           }}
                         >
                           {p.Booking?.guestName || "—"}
                         </div>
-                        <div style={{ fontSize: 11, color: "#9a9aa5" }}>
+                        <div
+                          style={{
+                            fontSize: 11,
+                            color: "var(--brand-text-muted)",
+                          }}
+                        >
                           {p.type} ·{" "}
                           {p.paidAt ? formatDate(p.paidAt) : "Unpaid"}
                         </div>
@@ -1243,7 +1287,7 @@ export default function OwnerPage() {
                           style={{
                             fontSize: 13,
                             fontWeight: 600,
-                            color: "#f5f5f7",
+                            color: "var(--brand-text)",
                           }}
                         >
                           ₱
@@ -1267,7 +1311,9 @@ export default function OwnerPage() {
                     </div>
                   ))}
                   {payments.length === 0 && (
-                    <p style={{ fontSize: 13, color: "#9a9aa5" }}>
+                    <p
+                      style={{ fontSize: 13, color: "var(--brand-text-muted)" }}
+                    >
                       No payments yet.
                     </p>
                   )}
@@ -1276,10 +1322,10 @@ export default function OwnerPage() {
                 {/* Team */}
                 <div
                   style={{
-                    background: "#15151a",
+                    background: "var(--brand-surface)",
                     borderRadius: 16,
                     boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
-                    border: "1px solid #1f1f26",
+                    border: "1px solid var(--brand-border)",
                     padding: "20px 24px",
                   }}
                 >
@@ -1287,14 +1333,16 @@ export default function OwnerPage() {
                     style={{
                       fontSize: 13,
                       fontWeight: 700,
-                      color: "#f5f5f7",
+                      color: "var(--brand-text)",
                       marginBottom: 16,
                     }}
                   >
                     Team
                   </div>
                   {employees.length === 0 ? (
-                    <p style={{ fontSize: 13, color: "#9a9aa5" }}>
+                    <p
+                      style={{ fontSize: 13, color: "var(--brand-text-muted)" }}
+                    >
                       No employees yet. Go to the Employees tab to invite
                       someone.
                     </p>
@@ -1307,7 +1355,7 @@ export default function OwnerPage() {
                           alignItems: "center",
                           justifyContent: "space-between",
                           padding: "10px 0",
-                          borderBottom: "1px solid #0a0a0c",
+                          borderBottom: "1px solid var(--background)",
                         }}
                       >
                         <div
@@ -1339,12 +1387,17 @@ export default function OwnerPage() {
                               style={{
                                 fontSize: 13,
                                 fontWeight: 600,
-                                color: "#f5f5f7",
+                                color: "var(--brand-text)",
                               }}
                             >
                               {e.name}
                             </div>
-                            <div style={{ fontSize: 11, color: "#9a9aa5" }}>
+                            <div
+                              style={{
+                                fontSize: 11,
+                                color: "var(--brand-text-muted)",
+                              }}
+                            >
                               {e.email}
                             </div>
                           </div>
@@ -1396,19 +1449,21 @@ export default function OwnerPage() {
                 {employees.length === 0 ? (
                   <div
                     style={{
-                      background: "#15151a",
+                      background: "var(--brand-surface)",
                       borderRadius: 16,
                       padding: 60,
                       textAlign: "center",
                       boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
-                      border: "1px solid #1f1f26",
+                      border: "1px solid var(--brand-border)",
                     }}
                   >
                     <div style={{ fontSize: 48, marginBottom: 16 }}>👥</div>
-                    <h3 style={{ color: "#f5f5f7", marginBottom: 8 }}>
+                    <h3 style={{ color: "var(--brand-text)", marginBottom: 8 }}>
                       No employees yet
                     </h3>
-                    <p style={{ color: "#9a9aa5", fontSize: 14 }}>
+                    <p
+                      style={{ color: "var(--brand-text-muted)", fontSize: 14 }}
+                    >
                       Invite your first team member using the button above.
                     </p>
                   </div>
@@ -1417,13 +1472,13 @@ export default function OwnerPage() {
                     <div
                       key={emp.id}
                       style={{
-                        background: "#15151a",
+                        background: "var(--brand-surface)",
                         borderRadius: 16,
                         boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
-                        border: "1px solid #1f1f26",
+                        border: "1px solid var(--brand-border)",
                         padding: "20px 24px",
                         borderLeft: `4px solid ${
-                          STATUS_COLORS[emp.status]?.bg || "#23232b"
+                          STATUS_COLORS[emp.status]?.bg || "var(--brand-border)"
                         }`,
                         opacity: emp.status === "revoked" ? 0.6 : 1,
                       }}
@@ -1466,14 +1521,19 @@ export default function OwnerPage() {
                             <div
                               style={{
                                 fontWeight: 700,
-                                color: "#f5f5f7",
+                                color: "var(--brand-text)",
                                 fontSize: 15,
                                 marginBottom: 3,
                               }}
                             >
                               {emp.name}
                             </div>
-                            <div style={{ fontSize: 13, color: "#9a9aa5" }}>
+                            <div
+                              style={{
+                                fontSize: 13,
+                                color: "var(--brand-text-muted)",
+                              }}
+                            >
                               {emp.email}
                             </div>
                             {emp.invited_at && emp.status === "invited" && (
@@ -1586,19 +1646,21 @@ export default function OwnerPage() {
                 {expenseNotes.length === 0 ? (
                   <div
                     style={{
-                      background: "#15151a",
+                      background: "var(--brand-surface)",
                       borderRadius: 16,
                       padding: 60,
                       textAlign: "center",
                       boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
-                      border: "1px solid #1f1f26",
+                      border: "1px solid var(--brand-border)",
                     }}
                   >
                     <div style={{ fontSize: 48, marginBottom: 16 }}>🧾</div>
-                    <h3 style={{ color: "#f5f5f7", marginBottom: 8 }}>
+                    <h3 style={{ color: "var(--brand-text)", marginBottom: 8 }}>
                       No expenses recorded
                     </h3>
-                    <p style={{ color: "#9a9aa5", fontSize: 14 }}>
+                    <p
+                      style={{ color: "var(--brand-text-muted)", fontSize: 14 }}
+                    >
                       Expenses added by housekeeping and auditors will appear
                       here.
                     </p>
@@ -1608,13 +1670,14 @@ export default function OwnerPage() {
                     <div
                       key={note.id}
                       style={{
-                        background: "#15151a",
+                        background: "var(--brand-surface)",
                         borderRadius: 16,
                         boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
-                        border: "1px solid #1f1f26",
+                        border: "1px solid var(--brand-border)",
                         padding: "18px 24px",
                         borderLeft: `4px solid ${
-                          CATEGORY_COLORS[note.category]?.bg || "#23232b"
+                          CATEGORY_COLORS[note.category]?.bg ||
+                          "var(--brand-border)"
                         }`,
                       }}
                     >
@@ -1644,7 +1707,7 @@ export default function OwnerPage() {
                               marginLeft: "auto",
                               fontSize: 16,
                               fontWeight: 700,
-                              color: "#f5f5f7",
+                              color: "var(--brand-text)",
                             }}
                           >
                             ₱
@@ -1658,14 +1721,19 @@ export default function OwnerPage() {
                         style={{
                           fontSize: 14,
                           lineHeight: 1.65,
-                          color: "#f5f5f7",
+                          color: "var(--brand-text)",
                           marginBottom: 10,
                           whiteSpace: "pre-wrap",
                         }}
                       >
                         {note.content}
                       </p>
-                      <div style={{ fontSize: 12, color: "#9a9aa5" }}>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          color: "var(--brand-text-muted)",
+                        }}
+                      >
                         {formatDateTime(note.createdAt)}
                       </div>
                     </div>
@@ -1682,19 +1750,21 @@ export default function OwnerPage() {
                 {payments.length === 0 ? (
                   <div
                     style={{
-                      background: "#15151a",
+                      background: "var(--brand-surface)",
                       borderRadius: 16,
                       padding: 60,
                       textAlign: "center",
                       boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
-                      border: "1px solid #1f1f26",
+                      border: "1px solid var(--brand-border)",
                     }}
                   >
                     <div style={{ fontSize: 48, marginBottom: 16 }}>💳</div>
-                    <h3 style={{ color: "#f5f5f7", marginBottom: 8 }}>
+                    <h3 style={{ color: "var(--brand-text)", marginBottom: 8 }}>
                       No payments yet
                     </h3>
-                    <p style={{ color: "#9a9aa5", fontSize: 14 }}>
+                    <p
+                      style={{ color: "var(--brand-text-muted)", fontSize: 14 }}
+                    >
                       Payments will appear here once bookings are created.
                     </p>
                   </div>
@@ -1703,13 +1773,13 @@ export default function OwnerPage() {
                     <div
                       key={p.id}
                       style={{
-                        background: "#15151a",
+                        background: "var(--brand-surface)",
                         borderRadius: 16,
                         boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
-                        border: "1px solid #1f1f26",
+                        border: "1px solid var(--brand-border)",
                         padding: "20px 24px",
                         borderLeft: `4px solid ${
-                          STATUS_COLORS[p.status]?.bg || "#23232b"
+                          STATUS_COLORS[p.status]?.bg || "var(--brand-border)"
                         }`,
                       }}
                     >
@@ -1726,7 +1796,7 @@ export default function OwnerPage() {
                           <div
                             style={{
                               fontWeight: 700,
-                              color: "#f5f5f7",
+                              color: "var(--brand-text)",
                               fontSize: 15,
                               marginBottom: 4,
                             }}
@@ -1736,7 +1806,7 @@ export default function OwnerPage() {
                           <div
                             style={{
                               fontSize: 12,
-                              color: "#9a9aa5",
+                              color: "var(--brand-text-muted)",
                               marginBottom: 4,
                             }}
                           >
@@ -1746,7 +1816,7 @@ export default function OwnerPage() {
                             <div
                               style={{
                                 fontSize: 13,
-                                color: "#9a9aa5",
+                                color: "var(--brand-text-muted)",
                                 fontStyle: "italic",
                               }}
                             >
@@ -1759,7 +1829,7 @@ export default function OwnerPage() {
                             style={{
                               fontSize: 20,
                               fontWeight: 700,
-                              color: "#f5f5f7",
+                              color: "var(--brand-text)",
                               marginBottom: 6,
                             }}
                           >
@@ -1784,7 +1854,7 @@ export default function OwnerPage() {
                             <div
                               style={{
                                 fontSize: 11,
-                                color: "#9a9aa5",
+                                color: "var(--brand-text-muted)",
                                 marginTop: 6,
                               }}
                             >
@@ -1828,12 +1898,12 @@ export default function OwnerPage() {
                       style={{
                         width: "100%",
                         padding: "9px 14px 9px 34px",
-                        border: "1.5px solid #23232b",
+                        border: "1.5px solid var(--brand-border)",
                         borderRadius: 10,
                         fontSize: 13,
-                        color: "#f5f5f7",
+                        color: "var(--brand-text)",
                         outline: "none",
-                        background: "#15151a",
+                        background: "var(--brand-surface)",
                         fontFamily: "inherit",
                       }}
                     />
@@ -1844,7 +1914,7 @@ export default function OwnerPage() {
                         top: "50%",
                         transform: "translateY(-50%)",
                         fontSize: 13,
-                        color: "#9a9aa5",
+                        color: "var(--brand-text-muted)",
                       }}
                     >
                       🔍
@@ -1856,11 +1926,11 @@ export default function OwnerPage() {
                     onChange={(e) => setFilterProperty(e.target.value)}
                     style={{
                       padding: "9px 12px",
-                      border: "1.5px solid #23232b",
+                      border: "1.5px solid var(--brand-border)",
                       borderRadius: 10,
                       fontSize: 13,
-                      color: "#f5f5f7",
-                      background: "#15151a",
+                      color: "var(--brand-text)",
+                      background: "var(--brand-surface)",
                       outline: "none",
                       cursor: "pointer",
                       fontFamily: "inherit",
@@ -1879,11 +1949,11 @@ export default function OwnerPage() {
                     onChange={(e) => setFilterPlatform(e.target.value)}
                     style={{
                       padding: "9px 12px",
-                      border: "1.5px solid #23232b",
+                      border: "1.5px solid var(--brand-border)",
                       borderRadius: 10,
                       fontSize: 13,
-                      color: "#f5f5f7",
-                      background: "#15151a",
+                      color: "var(--brand-text)",
+                      background: "var(--brand-surface)",
                       outline: "none",
                       cursor: "pointer",
                       fontFamily: "inherit",
@@ -1902,11 +1972,11 @@ export default function OwnerPage() {
                     onChange={(e) => setFilterPaymentState(e.target.value)}
                     style={{
                       padding: "9px 12px",
-                      border: "1.5px solid #23232b",
+                      border: "1.5px solid var(--brand-border)",
                       borderRadius: 10,
                       fontSize: 13,
-                      color: "#f5f5f7",
-                      background: "#15151a",
+                      color: "var(--brand-text)",
+                      background: "var(--brand-surface)",
                       outline: "none",
                       cursor: "pointer",
                       fontFamily: "inherit",
@@ -1923,11 +1993,11 @@ export default function OwnerPage() {
                     onChange={(e) => setFilterBookingStatus(e.target.value)}
                     style={{
                       padding: "9px 12px",
-                      border: "1.5px solid #23232b",
+                      border: "1.5px solid var(--brand-border)",
                       borderRadius: 10,
                       fontSize: 13,
-                      color: "#f5f5f7",
-                      background: "#15151a",
+                      color: "var(--brand-text)",
+                      background: "var(--brand-surface)",
                       outline: "none",
                       cursor: "pointer",
                       fontFamily: "inherit",
@@ -1981,7 +2051,7 @@ export default function OwnerPage() {
                     style={{
                       textAlign: "center",
                       padding: 24,
-                      color: "#9a9aa5",
+                      color: "var(--brand-text-muted)",
                     }}
                   >
                     No bookings found.
@@ -1991,13 +2061,13 @@ export default function OwnerPage() {
                     <div
                       key={b.id}
                       style={{
-                        background: "#15151a",
+                        background: "var(--brand-surface)",
                         borderRadius: 16,
                         boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
-                        border: "1px solid #1f1f26",
+                        border: "1px solid var(--brand-border)",
                         padding: "20px 24px",
                         borderLeft: `4px solid ${
-                          STATUS_COLORS[b.status]?.bg || "#23232b"
+                          STATUS_COLORS[b.status]?.bg || "var(--brand-border)"
                         }`,
                       }}
                     >
@@ -2039,13 +2109,18 @@ export default function OwnerPage() {
                             <div
                               style={{
                                 fontWeight: 700,
-                                color: "#f5f5f7",
+                                color: "var(--brand-text)",
                                 fontSize: 15,
                               }}
                             >
                               {b.guestName}
                             </div>
-                            <div style={{ fontSize: 12, color: "#9a9aa5" }}>
+                            <div
+                              style={{
+                                fontSize: 12,
+                                color: "var(--brand-text-muted)",
+                              }}
+                            >
                               🏠 {b.Property?.name || "—"} · {b.source}
                             </div>
                           </div>
@@ -2070,7 +2145,7 @@ export default function OwnerPage() {
                               <div
                                 style={{
                                   fontSize: 11,
-                                  color: "#9a9aa5",
+                                  color: "var(--brand-text-muted)",
                                   textTransform: "uppercase",
                                   letterSpacing: "0.06em",
                                   marginBottom: 2,
@@ -2082,7 +2157,7 @@ export default function OwnerPage() {
                                 style={{
                                   fontSize: 13,
                                   fontWeight: 600,
-                                  color: "#f5f5f7",
+                                  color: "var(--brand-text)",
                                 }}
                               >
                                 {item.val}
@@ -2132,7 +2207,7 @@ export default function OwnerPage() {
         >
           <div
             style={{
-              background: "#15151a",
+              background: "var(--brand-surface)",
               borderRadius: 20,
               padding: 36,
               width: "100%",
@@ -2148,20 +2223,26 @@ export default function OwnerPage() {
                 marginBottom: 28,
               }}
             >
-              <h2 style={{ fontSize: 20, fontWeight: 700, color: "#f5f5f7" }}>
+              <h2
+                style={{
+                  fontSize: 20,
+                  fontWeight: 700,
+                  color: "var(--brand-text)",
+                }}
+              >
                 Invite Employee
               </h2>
               <button
                 onClick={() => setShowInviteForm(false)}
                 style={{
-                  background: "#23232b",
+                  background: "var(--brand-border)",
                   border: "none",
                   borderRadius: 8,
                   width: 32,
                   height: 32,
                   cursor: "pointer",
                   fontSize: 18,
-                  color: "#9a9aa5",
+                  color: "var(--brand-text-muted)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -2181,10 +2262,10 @@ export default function OwnerPage() {
                   placeholder="Maria Santos"
                   style={inputStyle}
                   onFocus={(e) =>
-                    (e.currentTarget.style.borderColor = "#2cb5b0")
+                    (e.currentTarget.style.borderColor = "var(--brand-accent)")
                   }
                   onBlur={(e) =>
-                    (e.currentTarget.style.borderColor = "#23232b")
+                    (e.currentTarget.style.borderColor = "var(--brand-border)")
                   }
                 />
               </div>
@@ -2197,10 +2278,10 @@ export default function OwnerPage() {
                   placeholder="maria@example.com"
                   style={inputStyle}
                   onFocus={(e) =>
-                    (e.currentTarget.style.borderColor = "#2cb5b0")
+                    (e.currentTarget.style.borderColor = "var(--brand-accent)")
                   }
                   onBlur={(e) =>
-                    (e.currentTarget.style.borderColor = "#23232b")
+                    (e.currentTarget.style.borderColor = "var(--brand-border)")
                   }
                 />
               </div>
@@ -2254,10 +2335,10 @@ export default function OwnerPage() {
                   style={{
                     flex: 1,
                     padding: 12,
-                    border: "1.5px solid #23232b",
+                    border: "1.5px solid var(--brand-border)",
                     borderRadius: 10,
-                    background: "#15151a",
-                    color: "#9a9aa5",
+                    background: "var(--brand-surface)",
+                    color: "var(--brand-text-muted)",
                     fontSize: 14,
                     fontWeight: 600,
                     cursor: "pointer",
@@ -2275,13 +2356,13 @@ export default function OwnerPage() {
                     padding: 12,
                     background:
                       inviting || !inviteName.trim() || !inviteEmail.trim()
-                        ? "#23232b"
+                        ? "var(--brand-border)"
                         : "linear-gradient(135deg, #1a2744, #2cb5b0)",
                     border: "none",
                     borderRadius: 10,
                     color:
                       inviting || !inviteName.trim() || !inviteEmail.trim()
-                        ? "#8896a5"
+                        ? "var(--brand-text-muted)"
                         : "white",
                     fontSize: 14,
                     fontWeight: 600,
@@ -2308,7 +2389,7 @@ export default function OwnerPage() {
         input[type=number]::-webkit-outer-spin-button,
         input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
         input::placeholder { color: #5c5c64; }
-        select option { background: #15151a; color: #f5f5f7; }
+        select option { background: var(--brand-surface); color: var(--brand-text); }
       `}</style>
     </div>
   );
