@@ -187,9 +187,13 @@ export default function DashboardPage() {
             {
               label: "+ New Booking",
               href: "/dashboard/bookings",
-              bg: "#2cb5b0",
+              bg: "var(--brand-text)",
             },
-            { label: "↻ Sync iCal", href: "/dashboard/ical", bg: "#8896a5" },
+            {
+              label: "↻ Sync iCal",
+              href: "/dashboard/ical",
+              bg: "var(--brand-text)",
+            },
           ].map((action) => (
             <a
               key={action.label}
