@@ -174,6 +174,24 @@ export default function BookingsPage() {
     setLoading(false);
   }
 
+  function parseDateTime(dateStr: string, timeStr: string | null): number {
+    const date = new Date(dateStr);
+    if (!timeStr) return date.getTime();
+
+    const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
+    if (!match) return date.getTime();
+
+    let hours = parseInt(match[1], 10);
+    const minutes = parseInt(match[2], 10);
+    const period = match[3].toUpperCase();
+
+    if (period === "PM" && hours !== 12) hours += 12;
+    if (period === "AM" && hours === 12) hours = 0;
+
+    date.setHours(hours, minutes, 0, 0);
+    return date.getTime();
+  }
+
   function applyStayType(stayType: string, checkIn: string, checkOut: string) {
     const rate = RATES[stayType as keyof typeof RATES];
     if (!rate || stayType === "Custom") return {};
@@ -226,11 +244,14 @@ export default function BookingsPage() {
     setForm(updated);
 
     if (updated.propertyId && updated.checkIn && updated.checkOut) {
+      // in handleFormChange
       const warning = checkConflict(
         updated.propertyId,
         updated.checkIn,
         updated.checkOut,
         updated.stayType,
+        updated.checkInTime,
+        updated.checkOutTime,
         editingId ?? undefined
       );
       setConflictWarning(warning);
@@ -242,19 +263,21 @@ export default function BookingsPage() {
     checkIn: string,
     checkOut: string,
     newStayType: string,
+    newCheckInTime: string,
+    newCheckOutTime: string,
     excludeId?: string
   ) {
     if (!propertyId || !checkIn || !checkOut) return "";
-    const newIn = new Date(checkIn).getTime();
-    const newOut = new Date(checkOut).getTime();
+    const newIn = parseDateTime(checkIn, newCheckInTime);
+    const newOut = parseDateTime(checkOut, newCheckOutTime);
     const newIsLong = newStayType.includes("Long");
 
     const overlapping = bookings.filter((b) => {
       if (b.id === excludeId) return false;
       if (b.propertyId !== propertyId) return false;
       if (b.status === "CANCELLED" || b.status === "CHECKED_OUT") return false;
-      const bIn = new Date(b.checkIn).getTime();
-      const bOut = new Date(b.checkOut).getTime();
+      const bIn = parseDateTime(b.checkIn, b.checkInTime);
+      const bOut = parseDateTime(b.checkOut, b.checkOutTime);
       return newIn < bOut && newOut > bIn;
     });
 
@@ -264,7 +287,6 @@ export default function BookingsPage() {
       (b.stayType || "").includes("Long")
     );
 
-    // Day Long blocks the whole day — conflict if anything overlaps at all
     if (newIsLong || existingHasLong) {
       const conflict = overlapping[0];
       return `⚠️ Fully booked — conflicts with ${
@@ -278,12 +300,10 @@ export default function BookingsPage() {
       })})`;
     }
 
-    // Two short stays can coexist; a third cannot
     if (overlapping.length >= 2) {
       return `⚠️ Fully booked — 2 short-stay bookings already exist for these dates`;
     }
 
-    // exactly 1 short-stay overlap: this is allowed (Partial → still bookable)
     return "";
   }
 
@@ -369,17 +389,25 @@ export default function BookingsPage() {
     setShowForm(true);
   }
 
+  function buildTimestamp(dateStr: string, timeStr: string): string {
+    const ms = parseDateTime(dateStr, timeStr);
+    return new Date(ms).toISOString();
+  }
+
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
     setError("");
 
     // in handleSave
+    // in handleSave
     const conflict = checkConflict(
       form.propertyId,
       form.checkIn,
       form.checkOut,
       form.stayType,
+      form.checkInTime,
+      form.checkOutTime,
       editingId ?? undefined
     );
     if (conflict && form.status !== "CANCELLED") {
@@ -403,8 +431,8 @@ export default function BookingsPage() {
       bookedBy: form.bookedBy || null,
       platform: form.platform || null,
       stayType: form.stayType || null,
-      checkIn: new Date(form.checkIn).toISOString(),
-      checkOut: new Date(form.checkOut).toISOString(),
+      checkIn: buildTimestamp(form.checkIn, form.checkInTime),
+      checkOut: buildTimestamp(form.checkOut, form.checkOutTime),
       checkInTime: form.checkInTime || null,
       checkOutTime: form.checkOutTime || null,
       hoursStayed: form.hoursStayed || null,
