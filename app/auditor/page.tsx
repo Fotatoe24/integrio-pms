@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { requireRole, IntegrioUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
@@ -22,6 +22,7 @@ interface Booking {
   checkIn: string;
   checkOut: string;
   status: string;
+  propertyId?: string;
   Property?: { name: string };
 }
 
@@ -33,7 +34,16 @@ interface Payment {
   status: string;
   paidAt: string | null;
   notes: string | null;
-  Booking?: { guestName: string; Property?: { name: string } };
+  Booking?: {
+    guestName: string;
+    propertyId?: string;
+    Property?: { name: string };
+  };
+}
+
+interface PropertyOption {
+  id: string;
+  name: string;
 }
 
 const CATEGORIES = [
@@ -45,6 +55,27 @@ const CATEGORIES = [
   "other",
 ];
 
+const BOOKING_STATUSES = [
+  "PENDING",
+  "CONFIRMED",
+  "CHECKED_IN",
+  "CHECKED_OUT",
+  "CANCELLED",
+];
+
+const PAYMENT_STATUSES = ["PENDING", "PAID", "PARTIAL", "REFUNDED"];
+
+const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
+  PENDING: { bg: "#fff3cd", color: "#856404" },
+  CONFIRMED: { bg: "#d1ecf1", color: "#0c5460" },
+  CHECKED_IN: { bg: "#d4edda", color: "#155724" },
+  CHECKED_OUT: { bg: "#e2e3e5", color: "#383d41" },
+  CANCELLED: { bg: "#f8d7da", color: "#721c24" },
+  PAID: { bg: "#d4edda", color: "#155724" },
+  PARTIAL: { bg: "#fff3cd", color: "#856404" },
+  REFUNDED: { bg: "#f8d7da", color: "#721c24" },
+};
+
 const CATEGORY_COLORS: Record<string, { bg: string; color: string }> = {
   general: { bg: "#e2e3e5", color: "#383d41" },
   cleaning: { bg: "#d1ecf1", color: "#0c5460" },
@@ -52,6 +83,39 @@ const CATEGORY_COLORS: Record<string, { bg: string; color: string }> = {
   maintenance: { bg: "#f8d7da", color: "#721c24" },
   laundry: { bg: "#d4edda", color: "#155724" },
   other: { bg: "#e8d5f5", color: "#5a2d82" },
+};
+
+// Inline style objects used by the edit form and the Add Expense modal.
+const inputStyle: React.CSSProperties = {
+  width: "100%",
+  padding: "10px 12px",
+  border: "1.5px solid #e8edf3",
+  borderRadius: 10,
+  fontSize: 14,
+  color: "var(--brand-text, #1a2744)",
+  outline: "none",
+  fontFamily: "inherit",
+  background: "var(--popover)",
+};
+
+const labelStyle: React.CSSProperties = {
+  display: "block",
+  fontSize: 12,
+  fontWeight: 600,
+  color: "var(--brand-text-muted, #8896a5)",
+  marginBottom: 6,
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+};
+
+const filterInputStyle: React.CSSProperties = {
+  padding: "8px 12px",
+  border: "1.5px solid #e8edf3",
+  borderRadius: 8,
+  fontSize: 13,
+  color: "#1a2744",
+  background: "white",
+  outline: "none",
 };
 
 const TABS = ["Overview", "Expenses", "Payments", "Bookings"] as const;
@@ -67,6 +131,16 @@ export default function AuditorPage() {
   const [expenseNotes, setExpenseNotes] = useState<ExpenseNote[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [properties, setProperties] = useState<PropertyOption[]>([]);
+
+  // Filters (shared across tabs where applicable)
+  const [search, setSearch] = useState("");
+  const [propertyFilter, setPropertyFilter] = useState("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [bookingStatusFilter, setBookingStatusFilter] = useState("all");
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState("all");
 
   // Add expense form
   const [showExpenseForm, setShowExpenseForm] = useState(false);
@@ -98,11 +172,15 @@ export default function AuditorPage() {
     // Get owner's properties
     const { data: props } = await supabase
       .from("Property")
-      .select("id")
-      .eq("owner_id", ownerId);
+      .select("id, name")
+      .eq("owner_id", ownerId)
+      .order("name", { ascending: true });
 
     const propertyIds = (props ?? []).map((p) => p.id);
+    if (props) setProperties(props);
 
+    // No limit — full history, matching expense scope so stat cards
+    // aren't comparing all-time expenses against a partial income slice.
     const { data: book } =
       propertyIds.length > 0
         ? await supabase
@@ -110,7 +188,6 @@ export default function AuditorPage() {
             .select("*, Property(name)")
             .in("propertyId", propertyIds)
             .order("checkIn", { ascending: false })
-            .limit(50)
         : { data: [] };
 
     const bookingIds = (book ?? []).map((b: { id: string }) => b.id);
@@ -118,7 +195,7 @@ export default function AuditorPage() {
       bookingIds.length > 0
         ? await supabase
             .from("Payment")
-            .select("*, Booking(guestName, Property(name))")
+            .select("*, Booking(guestName, propertyId, Property(name))")
             .in("bookingId", bookingIds)
             .order("createdAt", { ascending: false })
         : { data: [] };
@@ -226,66 +303,117 @@ export default function AuditorPage() {
     );
   }
 
-  // Summary stats
-  const totalExpenses = expenseNotes.reduce(
+  function inDateRange(iso: string | null) {
+    if (!iso) return !dateFrom && !dateTo;
+    const t = new Date(iso).getTime();
+    if (dateFrom && t < new Date(dateFrom).getTime()) return false;
+    if (dateTo && t > new Date(dateTo).getTime() + 86399999) return false;
+    return true;
+  }
+
+  function resetFilters() {
+    setSearch("");
+    setPropertyFilter("all");
+    setDateFrom("");
+    setDateTo("");
+    setCategoryFilter("all");
+    setBookingStatusFilter("all");
+    setPaymentStatusFilter("all");
+  }
+
+  const hasActiveFilters =
+    search.trim() !== "" ||
+    propertyFilter !== "all" ||
+    dateFrom !== "" ||
+    dateTo !== "" ||
+    categoryFilter !== "all" ||
+    bookingStatusFilter !== "all" ||
+    paymentStatusFilter !== "all";
+
+  // Filtered datasets — these drive both the tab lists and the summary stats,
+  // so the numbers on screen always match what's visible below them.
+  const filteredBookings = useMemo(() => {
+    return bookings.filter((b) => {
+      if (
+        propertyFilter !== "all" &&
+        b.propertyId !== propertyFilter &&
+        b.Property?.name !== propertyFilter
+      )
+        return false;
+      if (bookingStatusFilter !== "all" && b.status !== bookingStatusFilter)
+        return false;
+      if (!inDateRange(b.checkIn)) return false;
+      if (
+        search.trim() &&
+        !b.guestName.toLowerCase().includes(search.trim().toLowerCase())
+      )
+        return false;
+      return true;
+    });
+  }, [bookings, propertyFilter, bookingStatusFilter, dateFrom, dateTo, search]);
+
+  const filteredBookingIds = useMemo(
+    () => new Set(filteredBookings.map((b) => b.id)),
+    [filteredBookings]
+  );
+
+  const filteredPayments = useMemo(() => {
+    return payments.filter((p) => {
+      if (!filteredBookingIds.has(p.bookingId)) return false;
+      if (paymentStatusFilter !== "all" && p.status !== paymentStatusFilter)
+        return false;
+      if (
+        search.trim() &&
+        !(p.Booking?.guestName || "")
+          .toLowerCase()
+          .includes(search.trim().toLowerCase())
+      )
+        return false;
+      return true;
+    });
+  }, [payments, filteredBookingIds, paymentStatusFilter, search]);
+
+  const filteredExpenses = useMemo(() => {
+    return expenseNotes.filter((n) => {
+      if (categoryFilter !== "all" && n.category !== categoryFilter)
+        return false;
+      if (!inDateRange(n.createdAt)) return false;
+      if (
+        search.trim() &&
+        !n.content.toLowerCase().includes(search.trim().toLowerCase())
+      )
+        return false;
+      return true;
+    });
+  }, [expenseNotes, categoryFilter, dateFrom, dateTo, search]);
+
+  // Summary stats — derived from the filtered sets
+  const totalExpenses = filteredExpenses.reduce(
     (s, n) => s + Number(n.amount || 0),
     0
   );
-  const totalPayments = payments
+  const totalPayments = filteredPayments
     .filter((p) => p.status === "PAID")
     .reduce((s, p) => s + Number(p.amount || 0), 0);
-  const pendingPayments = payments
+  const pendingPayments = filteredPayments
     .filter((p) => p.status === "PENDING")
     .reduce((s, p) => s + Number(p.amount || 0), 0);
   const netIncome = totalPayments - totalExpenses;
 
-  const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
-    PENDING: { bg: "#fff3cd", color: "#856404" },
-    CONFIRMED: { bg: "#d1ecf1", color: "#0c5460" },
-    CHECKED_IN: { bg: "#d4edda", color: "#155724" },
-    CHECKED_OUT: { bg: "#e2e3e5", color: "#383d41" },
-    CANCELLED: { bg: "#f8d7da", color: "#721c24" },
-    PAID: { bg: "#d4edda", color: "#155724" },
-    PARTIAL: { bg: "#fff3cd", color: "#856404" },
-    REFUNDED: { bg: "#f8d7da", color: "#721c24" },
-  };
-
   if (!user) return null;
-
-  const inputStyle: React.CSSProperties = {
-    width: "100%",
-    padding: "11px 14px",
-    border: "1.5px solid #e8edf3",
-    borderRadius: 10,
-    fontSize: 14,
-    color: "#1a2744",
-    outline: "none",
-    fontFamily: "inherit",
-    background: "white",
-  };
-
-  const labelStyle: React.CSSProperties = {
-    display: "block",
-    fontSize: 12,
-    fontWeight: 600,
-    color: "#8896a5",
-    textTransform: "uppercase",
-    letterSpacing: "0.06em",
-    marginBottom: 8,
-  };
 
   return (
     <div
       style={{
         minHeight: "100vh",
-        background: "#f0f4f8",
+        background: "var(--brand-bg, #f8f9fa)",
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
       }}
     >
       {/* Header */}
       <div
         style={{
-          background: "white",
+          background: "var(--brand-surface, #f8f9fa)",
           borderBottom: "1px solid #e8edf3",
           padding: "0 32px",
           height: 64,
@@ -298,13 +426,19 @@ export default function AuditorPage() {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          {/* Logo */}
           <img
-            src="./blacklogo.png"
+            src="/blacklogo.png"
             alt="Integrio"
-            className="w-20 sm:w-20 h-auto"
+            className="w-20 sm:w-20 h-auto block dark:hidden"
             style={{ filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.25))" }}
           />
+          <img
+            src="/darktrans.png"
+            alt="Integrio"
+            className="w-20 sm:w-20 h-auto hidden dark:block"
+            style={{ filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.25))" }}
+          />
+
           <span
             style={{
               fontSize: 12,
@@ -319,24 +453,11 @@ export default function AuditorPage() {
           </span>
         </div>
 
-        <a
-          href="/settings"
-          style={{
-            fontSize: 13,
-            color: "#8896a5",
-            border: "1.5px solid #e8edf3",
-            borderRadius: 8,
-            padding: "6px 14px",
-            textDecoration: "none",
-          }}
-        >
-          Settings
-        </a>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <span style={{ fontSize: 13, color: "#8896a5" }}>{user.name}</span>
 
           <a
-            href="/change-password"
+            href="/settings"
             style={{
               fontSize: 13,
               color: "#8896a5",
@@ -346,7 +467,7 @@ export default function AuditorPage() {
               textDecoration: "none",
             }}
           >
-            Change password
+            Settings
           </a>
 
           <button
@@ -369,13 +490,13 @@ export default function AuditorPage() {
       <div
         style={{ maxWidth: 960, margin: "0 auto", padding: "32px 24px 80px" }}
       >
-        {/* Page title + action */}
         <div
           style={{
             display: "flex",
-            alignItems: "center",
+            alignItems: "flex-start",
             justifyContent: "space-between",
-            marginBottom: 28,
+            flexWrap: "wrap",
+            gap: 16,
           }}
         >
           <div>
@@ -383,16 +504,22 @@ export default function AuditorPage() {
               style={{
                 fontSize: 24,
                 fontWeight: 700,
-                color: "#1a2744",
+                color: "var(--brand-text, #1a2744)",
                 marginBottom: 4,
               }}
             >
               Audit Dashboard
             </h1>
-            <p style={{ color: "#8896a5", fontSize: 14 }}>
+            <p
+              style={{
+                color: "var(--brand-text-muted, #8896a5)",
+                fontSize: 14,
+              }}
+            >
               Financial overview and expense management
             </p>
           </div>
+
           <button
             onClick={() => setShowExpenseForm(true)}
             style={{
@@ -408,10 +535,162 @@ export default function AuditorPage() {
               alignItems: "center",
               gap: 8,
               boxShadow: "0 4px 16px rgba(44,181,176,0.3)",
+              whiteSpace: "nowrap",
             }}
           >
             <span style={{ fontSize: 18 }}>+</span> Add Expense
           </button>
+        </div>
+
+        {/* Filter bar */}
+        <div
+          style={{
+            background: "var(--brand-surface, white)",
+            borderRadius: 16,
+            boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+            padding: 16,
+            marginTop: 24,
+            marginBottom: 28,
+            display: "flex",
+            flexDirection: "column",
+            gap: 12,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 12,
+              alignItems: "center",
+            }}
+          >
+            <input
+              type="text"
+              placeholder={
+                activeTab === "Expenses"
+                  ? "Search expense description..."
+                  : "Search guest name..."
+              }
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{ ...filterInputStyle, flex: 1, minWidth: 200 }}
+            />
+
+            {activeTab !== "Expenses" && (
+              <select
+                value={propertyFilter}
+                onChange={(e) => setPropertyFilter(e.target.value)}
+                style={filterInputStyle}
+              >
+                <option value="all">All properties</option>
+                {properties.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            )}
+
+            {activeTab === "Expenses" && (
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                style={filterInputStyle}
+              >
+                <option value="all">All categories</option>
+                {CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c.charAt(0).toUpperCase() + c.slice(1)}
+                  </option>
+                ))}
+              </select>
+            )}
+
+            {activeTab === "Bookings" && (
+              <select
+                value={bookingStatusFilter}
+                onChange={(e) => setBookingStatusFilter(e.target.value)}
+                style={filterInputStyle}
+              >
+                <option value="all">All statuses</option>
+                {BOOKING_STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {s.replace("_", " ")}
+                  </option>
+                ))}
+              </select>
+            )}
+
+            {activeTab === "Payments" && (
+              <select
+                value={paymentStatusFilter}
+                onChange={(e) => setPaymentStatusFilter(e.target.value)}
+                style={filterInputStyle}
+              >
+                <option value="all">All statuses</option>
+                {PAYMENT_STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            )}
+
+            {hasActiveFilters && (
+              <button
+                onClick={resetFilters}
+                style={{
+                  fontSize: 13,
+                  color: "#2cb5b0",
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  fontWeight: 600,
+                  padding: "0 8px",
+                }}
+              >
+                Clear filters
+              </button>
+            )}
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 12,
+              alignItems: "center",
+            }}
+          >
+            <label
+              style={{
+                fontSize: 12,
+                fontWeight: 600,
+                color: "#8896a5",
+                textTransform: "uppercase",
+                letterSpacing: "0.06em",
+              }}
+            >
+              Date range
+            </label>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              style={filterInputStyle}
+            />
+            <span style={{ color: "#8896a5", fontSize: 13 }}>to</span>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              style={filterInputStyle}
+            />
+            <span style={{ fontSize: 12, color: "#8896a5" }}>
+              Applies to check-in dates, expense entries, and date-filtered
+              stats below.
+            </span>
+          </div>
         </div>
 
         {/* Summary stat cards */}
@@ -435,8 +714,7 @@ export default function AuditorPage() {
                   value: `₱${totalPayments.toLocaleString("en-PH", {
                     minimumFractionDigits: 2,
                   })}`,
-                  sub: "Paid payments",
-                  color: "#155724",
+                  sub: "Paid payments (filtered)",
                   bg: "#d4edda",
                 },
                 {
@@ -444,8 +722,7 @@ export default function AuditorPage() {
                   value: `₱${totalExpenses.toLocaleString("en-PH", {
                     minimumFractionDigits: 2,
                   })}`,
-                  sub: `${expenseNotes.length} entries`,
-                  color: "#721c24",
+                  sub: `${filteredExpenses.length} entries`,
                   bg: "#f8d7da",
                 },
                 {
@@ -453,8 +730,7 @@ export default function AuditorPage() {
                   value: `₱${pendingPayments.toLocaleString("en-PH", {
                     minimumFractionDigits: 2,
                   })}`,
-                  sub: "Unpaid payments",
-                  color: "#856404",
+                  sub: "Unpaid payments (filtered)",
                   bg: "#fff3cd",
                 },
                 {
@@ -463,14 +739,13 @@ export default function AuditorPage() {
                     minimumFractionDigits: 2,
                   })}`,
                   sub: "Income minus expenses",
-                  color: netIncome >= 0 ? "#0c5460" : "#721c24",
                   bg: netIncome >= 0 ? "#d1ecf1" : "#f8d7da",
                 },
               ].map((stat) => (
                 <div
                   key={stat.label}
                   style={{
-                    background: "white",
+                    background: "var(--brand-surface, white)",
                     borderRadius: 16,
                     boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
                     padding: "20px 24px",
@@ -481,7 +756,7 @@ export default function AuditorPage() {
                     style={{
                       fontSize: 12,
                       fontWeight: 600,
-                      color: "#8896a5",
+                      color: "var(--brand-text-muted, #8896a5)",
                       textTransform: "uppercase",
                       letterSpacing: "0.06em",
                       marginBottom: 8,
@@ -493,13 +768,18 @@ export default function AuditorPage() {
                     style={{
                       fontSize: 22,
                       fontWeight: 700,
-                      color: "#1a2744",
+                      color: "var(--brand-text, #1a2744)",
                       marginBottom: 4,
                     }}
                   >
                     {stat.value}
                   </div>
-                  <div style={{ fontSize: 12, color: "#8896a5" }}>
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: "var(--brand-text-muted, #8896a5)",
+                    }}
+                  >
                     {stat.sub}
                   </div>
                 </div>
@@ -551,7 +831,7 @@ export default function AuditorPage() {
                   {/* Recent expenses */}
                   <div
                     style={{
-                      background: "white",
+                      background: "var(--brand-surface, white)",
                       borderRadius: 16,
                       boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
                       padding: "20px 24px",
@@ -561,7 +841,7 @@ export default function AuditorPage() {
                       style={{
                         fontSize: 13,
                         fontWeight: 700,
-                        color: "#1a2744",
+                        color: "var(--brand-text, #1a2744)",
                         marginBottom: 16,
                       }}
                     >
@@ -592,7 +872,9 @@ export default function AuditorPage() {
                           >
                             {n.category}
                           </span>
-                          <span style={{ fontSize: 13, color: "#1a2744" }}>
+                          <span
+                            style={{ fontSize: 13, color: "var(--brand-text)" }}
+                          >
                             {n.content.slice(0, 40)}
                             {n.content.length > 40 ? "…" : ""}
                           </span>
@@ -601,7 +883,7 @@ export default function AuditorPage() {
                           style={{
                             fontSize: 13,
                             fontWeight: 600,
-                            color: "#1a2744",
+                            color: "var(--brand-text, #1a2744)",
                             whiteSpace: "nowrap",
                             marginLeft: 12,
                           }}
@@ -623,7 +905,7 @@ export default function AuditorPage() {
                   {/* Recent payments */}
                   <div
                     style={{
-                      background: "white",
+                      background: "var(--brand-surface, white)",
                       borderRadius: 16,
                       boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
                       padding: "20px 24px",
@@ -633,7 +915,7 @@ export default function AuditorPage() {
                       style={{
                         fontSize: 13,
                         fontWeight: 700,
-                        color: "#1a2744",
+                        color: "var(--brand-text, #1a2744)",
                         marginBottom: 16,
                       }}
                     >
@@ -655,12 +937,17 @@ export default function AuditorPage() {
                             style={{
                               fontSize: 13,
                               fontWeight: 600,
-                              color: "#1a2744",
+                              color: "var(--brand-text, #1a2744)",
                             }}
                           >
                             {p.Booking?.guestName || "—"}
                           </div>
-                          <div style={{ fontSize: 11, color: "#8896a5" }}>
+                          <div
+                            style={{
+                              fontSize: 11,
+                              color: "var(--brand-text-muted, #8896a5)",
+                            }}
+                          >
                             {p.type} ·{" "}
                             {p.paidAt ? formatDate(p.paidAt) : "Unpaid"}
                           </div>
@@ -670,7 +957,7 @@ export default function AuditorPage() {
                             style={{
                               fontSize: 13,
                               fontWeight: 600,
-                              color: "#1a2744",
+                              color: "var(--brand-text, #1a2744)",
                             }}
                           >
                             ₱
@@ -694,7 +981,12 @@ export default function AuditorPage() {
                       </div>
                     ))}
                     {payments.length === 0 && (
-                      <p style={{ fontSize: 13, color: "#8896a5" }}>
+                      <p
+                        style={{
+                          fontSize: 13,
+                          color: "var(--brand-text-muted, #8896a5)",
+                        }}
+                      >
                         No payments yet.
                       </p>
                     )}
@@ -708,10 +1000,10 @@ export default function AuditorPage() {
               <div
                 style={{ display: "flex", flexDirection: "column", gap: 12 }}
               >
-                {expenseNotes.length === 0 ? (
+                {filteredExpenses.length === 0 ? (
                   <div
                     style={{
-                      background: "white",
+                      background: "var(--brand-surface, white)",
                       borderRadius: 16,
                       padding: 60,
                       textAlign: "center",
@@ -719,19 +1011,33 @@ export default function AuditorPage() {
                     }}
                   >
                     <div style={{ fontSize: 48, marginBottom: 16 }}>🧾</div>
-                    <h3 style={{ color: "#1a2744", marginBottom: 8 }}>
-                      No expenses yet
+                    <h3
+                      style={{
+                        color: "var(--brand-text, #1a2744)",
+                        marginBottom: 8,
+                      }}
+                    >
+                      {expenseNotes.length === 0
+                        ? "No expenses yet"
+                        : "No expenses match your filters"}
                     </h3>
-                    <p style={{ color: "#8896a5", fontSize: 14 }}>
-                      Add the first expense using the button above.
+                    <p
+                      style={{
+                        color: "var(--brand-text-muted, #8896a5)",
+                        fontSize: 14,
+                      }}
+                    >
+                      {expenseNotes.length === 0
+                        ? "Add the first expense using the button above."
+                        : "Try adjusting or clearing the filters above."}
                     </p>
                   </div>
                 ) : (
-                  expenseNotes.map((note) => (
+                  filteredExpenses.map((note) => (
                     <div
                       key={note.id}
                       style={{
-                        background: "white",
+                        background: "var(--brand-surface, white)",
                         borderRadius: 16,
                         boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
                         padding: "20px 24px",
@@ -774,8 +1080,8 @@ export default function AuditorPage() {
                                 border: "1.5px solid #e8edf3",
                                 borderRadius: 8,
                                 fontSize: 13,
-                                color: "#1a2744",
-                                background: "white",
+                                color: "var(--brand-text, #1a2744)",
+                                background: "var(--brand-surface, white)",
                                 outline: "none",
                               }}
                             >
@@ -795,7 +1101,12 @@ export default function AuditorPage() {
                                 gap: 4,
                               }}
                             >
-                              <span style={{ fontSize: 13, color: "#8896a5" }}>
+                              <span
+                                style={{
+                                  fontSize: 13,
+                                  color: "var(--brand-text, #1a2744)",
+                                }}
+                              >
                                 ₱
                               </span>
                               <input
@@ -808,7 +1119,7 @@ export default function AuditorPage() {
                                   border: "none",
                                   outline: "none",
                                   fontSize: 14,
-                                  color: "#1a2744",
+                                  color: "var(--brand-text, #1a2744)",
                                   width: 90,
                                   padding: "8px 0",
                                   fontFamily: "inherit",
@@ -826,10 +1137,11 @@ export default function AuditorPage() {
                                 onClick={() => setEditingId(null)}
                                 style={{
                                   padding: "7px 16px",
-                                  border: "1.5px solid #e8edf3",
+                                  border:
+                                    "1.5px solid var(--brand-border, #e8edf3)",
                                   borderRadius: 8,
-                                  background: "white",
-                                  color: "#8896a5",
+                                  background: "var(--brand-surface, white)",
+                                  color: "var(--brand-text-muted, #8896a5)",
                                   fontSize: 13,
                                   fontWeight: 600,
                                   cursor: "pointer",
@@ -885,7 +1197,7 @@ export default function AuditorPage() {
                                   marginLeft: "auto",
                                   fontSize: 16,
                                   fontWeight: 700,
-                                  color: "#1a2744",
+                                  color: "var(--brand-text, #1a2744)",
                                 }}
                               >
                                 ₱
@@ -899,7 +1211,7 @@ export default function AuditorPage() {
                             style={{
                               fontSize: 14,
                               lineHeight: 1.65,
-                              color: "#1a2744",
+                              color: "var(--brand-text, #1a2744)",
                               marginBottom: 14,
                               whiteSpace: "pre-wrap",
                             }}
@@ -925,8 +1237,8 @@ export default function AuditorPage() {
                                   fontSize: 12,
                                   fontWeight: 600,
                                   border: "1.5px solid #e8edf3",
-                                  background: "white",
-                                  color: "#1a2744",
+                                  background: "var(--brand-surface, white)",
+                                  color: "var(--brand-text, #1a2744)",
                                   cursor: "pointer",
                                 }}
                               >
@@ -940,8 +1252,8 @@ export default function AuditorPage() {
                                   fontSize: 12,
                                   fontWeight: 600,
                                   border: "1.5px solid #fecaca",
-                                  background: "#fef2f2",
-                                  color: "#e74c3c",
+                                  background: "var(--brand-surface, white)",
+                                  color: "var(--brand-danger, #e74c3c)",
                                   cursor: "pointer",
                                 }}
                               >
@@ -962,10 +1274,10 @@ export default function AuditorPage() {
               <div
                 style={{ display: "flex", flexDirection: "column", gap: 12 }}
               >
-                {payments.length === 0 ? (
+                {filteredPayments.length === 0 ? (
                   <div
                     style={{
-                      background: "white",
+                      background: "var(--brand-surface, white)",
                       borderRadius: 16,
                       padding: 60,
                       textAlign: "center",
@@ -974,23 +1286,33 @@ export default function AuditorPage() {
                   >
                     <div style={{ fontSize: 48, marginBottom: 16 }}>💳</div>
                     <h3 style={{ color: "#1a2744", marginBottom: 8 }}>
-                      No payments recorded
+                      {payments.length === 0
+                        ? "No payments recorded"
+                        : "No payments match your filters"}
                     </h3>
-                    <p style={{ color: "#8896a5", fontSize: 14 }}>
-                      Payments will appear here once bookings are created.
+                    <p
+                      style={{
+                        color: "var(--brand-text-muted, #8896a5)",
+                        fontSize: 14,
+                      }}
+                    >
+                      {payments.length === 0
+                        ? "Payments will appear here once bookings are created."
+                        : "Try adjusting or clearing the filters above."}
                     </p>
                   </div>
                 ) : (
-                  payments.map((p) => (
+                  filteredPayments.map((p) => (
                     <div
                       key={p.id}
                       style={{
-                        background: "white",
+                        background: "var(--brand-surface, white)",
                         borderRadius: 16,
                         boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
                         padding: "20px 24px",
                         borderLeft: `4px solid ${
-                          STATUS_COLORS[p.status]?.bg || "#e8edf3"
+                          STATUS_COLORS[p.status]?.bg ||
+                          "var(--brand-surface, white)"
                         }`,
                       }}
                     >
@@ -1007,7 +1329,7 @@ export default function AuditorPage() {
                           <div
                             style={{
                               fontWeight: 700,
-                              color: "#1a2744",
+                              color: "var(--brand-text, #1a2744)",
                               fontSize: 16,
                               marginBottom: 4,
                             }}
@@ -1017,7 +1339,7 @@ export default function AuditorPage() {
                           <div
                             style={{
                               fontSize: 12,
-                              color: "#8896a5",
+                              color: "var(--brand-text-muted, #8896a5)",
                               marginBottom: 8,
                             }}
                           >
@@ -1027,7 +1349,7 @@ export default function AuditorPage() {
                             <div
                               style={{
                                 fontSize: 13,
-                                color: "#8896a5",
+                                color: "var(--brand-text-muted, #8896a5)",
                                 fontStyle: "italic",
                               }}
                             >
@@ -1040,7 +1362,7 @@ export default function AuditorPage() {
                             style={{
                               fontSize: 20,
                               fontWeight: 700,
-                              color: "#1a2744",
+                              color: "var(--brand-text, #1a2744)",
                               marginBottom: 6,
                             }}
                           >
@@ -1065,7 +1387,7 @@ export default function AuditorPage() {
                             <div
                               style={{
                                 fontSize: 11,
-                                color: "#8896a5",
+                                color: "var(--brand-text-muted, #8896a5)",
                                 marginTop: 6,
                               }}
                             >
@@ -1085,10 +1407,10 @@ export default function AuditorPage() {
               <div
                 style={{ display: "flex", flexDirection: "column", gap: 12 }}
               >
-                {bookings.length === 0 ? (
+                {filteredBookings.length === 0 ? (
                   <div
                     style={{
-                      background: "white",
+                      background: "var(--brand-surface, white)",
                       borderRadius: 16,
                       padding: 60,
                       textAlign: "center",
@@ -1096,24 +1418,39 @@ export default function AuditorPage() {
                     }}
                   >
                     <div style={{ fontSize: 48, marginBottom: 16 }}>📅</div>
-                    <h3 style={{ color: "#1a2744", marginBottom: 8 }}>
-                      No bookings found
+                    <h3
+                      style={{
+                        color: "var(--brand-text, #1a2744)",
+                        marginBottom: 8,
+                      }}
+                    >
+                      {bookings.length === 0
+                        ? "No bookings found"
+                        : "No bookings match your filters"}
                     </h3>
-                    <p style={{ color: "#8896a5", fontSize: 14 }}>
-                      Bookings will appear here once created by the booker.
+                    <p
+                      style={{
+                        color: "var(--brand-text-muted, #8896a5)",
+                        fontSize: 14,
+                      }}
+                    >
+                      {bookings.length === 0
+                        ? "Bookings will appear here once created by the booker."
+                        : "Try adjusting or clearing the filters above."}
                     </p>
                   </div>
                 ) : (
-                  bookings.map((b) => (
+                  filteredBookings.map((b) => (
                     <div
                       key={b.id}
                       style={{
-                        background: "white",
+                        background: "var(--brand-surface, white)",
                         borderRadius: 16,
                         boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
                         padding: "20px 24px",
                         borderLeft: `4px solid ${
-                          STATUS_COLORS[b.status]?.bg || "#e8edf3"
+                          STATUS_COLORS[b.status]?.bg ||
+                          "var(--brand-surface, white)"
                         }`,
                       }}
                     >
@@ -1155,7 +1492,7 @@ export default function AuditorPage() {
                             <div
                               style={{
                                 fontWeight: 700,
-                                color: "#1a2744",
+                                color: "var(--brand-text, #1a2744)",
                                 fontSize: 15,
                               }}
                             >
@@ -1186,7 +1523,7 @@ export default function AuditorPage() {
                               <div
                                 style={{
                                   fontSize: 11,
-                                  color: "#8896a5",
+                                  color: "var(--brand-text-muted, #8896a5)",
                                   textTransform: "uppercase",
                                   letterSpacing: "0.06em",
                                   marginBottom: 2,
@@ -1198,7 +1535,7 @@ export default function AuditorPage() {
                                 style={{
                                   fontSize: 13,
                                   fontWeight: 600,
-                                  color: "#1a2744",
+                                  color: "var(--brand-text, #1a2744)",
                                 }}
                               >
                                 {item.val}
@@ -1234,7 +1571,7 @@ export default function AuditorPage() {
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(0,0,0,0.5)",
+            background: "rgba(0,0,0,0.7)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -1244,7 +1581,7 @@ export default function AuditorPage() {
         >
           <div
             style={{
-              background: "white",
+              background: "var(--brand-surface, white)",
               borderRadius: 20,
               padding: 36,
               width: "100%",
@@ -1260,26 +1597,32 @@ export default function AuditorPage() {
                 marginBottom: 28,
               }}
             >
-              <h2 style={{ fontSize: 20, fontWeight: 700, color: "#1a2744" }}>
+              <h2
+                style={{
+                  fontSize: 20,
+                  fontWeight: 700,
+                  color: "var(--brand-text, #1a2744)",
+                }}
+              >
                 Add Expense
               </h2>
               <button
                 onClick={() => setShowExpenseForm(false)}
                 style={{
-                  background: "#f0f4f8",
+                  background: "var(--brand-surface, white)",
                   border: "none",
                   borderRadius: 8,
                   width: 32,
                   height: 32,
                   cursor: "pointer",
                   fontSize: 18,
-                  color: "#8896a5",
+                  color: "var(--brand-text, #1a2744)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                 }}
               >
-                ×
+                X
               </button>
             </div>
 
@@ -1291,12 +1634,18 @@ export default function AuditorPage() {
                   onChange={(e) => setExpContent(e.target.value)}
                   placeholder="Describe the expense..."
                   rows={3}
-                  style={{ ...inputStyle, resize: "vertical" }}
+                  style={{
+                    ...inputStyle,
+                    resize: "vertical",
+                    color: "var(--brand-text, #1a2744)",
+                  }}
                   onFocus={(e) =>
-                    (e.currentTarget.style.borderColor = "#2cb5b0")
+                    (e.currentTarget.style.borderColor =
+                      "var(--brand-primary, #2cb5b0)")
                   }
                   onBlur={(e) =>
-                    (e.currentTarget.style.borderColor = "#e8edf3")
+                    (e.currentTarget.style.borderColor =
+                      "var(--brand-border, #e8edf3)")
                   }
                 />
               </div>
@@ -1345,12 +1694,12 @@ export default function AuditorPage() {
               {expError && (
                 <div
                   style={{
-                    background: "#fef2f2",
+                    background: "var(--brand-error, #fef2f2)",
                     border: "1px solid #fecaca",
                     borderRadius: 8,
                     padding: "10px 14px",
                     fontSize: 13,
-                    color: "#e74c3c",
+                    color: "var(--brand-error-text, #e74c3c)",
                   }}
                 >
                   {expError}
@@ -1365,8 +1714,8 @@ export default function AuditorPage() {
                     padding: 12,
                     border: "1.5px solid #e8edf3",
                     borderRadius: 10,
-                    background: "white",
-                    color: "#8896a5",
+                    background: "var(--brand-surface, white)",
+                    color: "var(--brand-text-muted, #8896a5)",
                     fontSize: 14,
                     fontWeight: 600,
                     cursor: "pointer",
