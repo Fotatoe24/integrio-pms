@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getCurrentUser, IntegrioUser } from "@/lib/auth";
 import { useTheme } from "@/contexts/ThemeContext";
+import { supabase } from "@/lib/supabase";
 
 const ROLE_HOME: Record<string, string> = {
   owner: "/owner",
@@ -40,11 +41,24 @@ const THEME_OPTIONS: {
   },
 ];
 
+interface IcalProperty {
+  id: string;
+  name: string;
+  airbnbIcalUrl: string | null;
+  autoSyncEnabled: boolean;
+  lastSyncedAt: string | null;
+  lastSyncStatus: string | null;
+}
+
 export default function SettingsPage() {
   const router = useRouter();
   const { theme, setTheme } = useTheme();
   const [user, setUser] = useState<IntegrioUser | null>(null);
   const [saved, setSaved] = useState(false);
+
+  const [icalProperties, setIcalProperties] = useState<IcalProperty[]>([]);
+  const [icalLoading, setIcalLoading] = useState(true);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   useEffect(() => {
     document.title = "Settings — Integrio";
@@ -56,6 +70,55 @@ export default function SettingsPage() {
     setUser(u);
   }, []);
 
+  useEffect(() => {
+    if (!user) return;
+    if (user.role !== "owner" && user.role !== "ADMIN") {
+      setIcalLoading(false);
+      return;
+    }
+    loadIcalProperties();
+  }, [user]);
+
+  async function loadIcalProperties() {
+    setIcalLoading(true);
+    const { data } = await supabase
+      .from("Property")
+      .select(
+        "id, name, airbnbIcalUrl, autoSyncEnabled, lastSyncedAt, lastSyncStatus"
+      )
+      .order("name");
+
+    setIcalProperties(data || []);
+    setIcalLoading(false);
+  }
+
+  async function toggleAutoSync(propertyId: string, current: boolean) {
+    setTogglingId(propertyId);
+
+    // optimistic update
+    setIcalProperties((prev) =>
+      prev.map((p) =>
+        p.id === propertyId ? { ...p, autoSyncEnabled: !current } : p
+      )
+    );
+
+    const { error } = await supabase
+      .from("Property")
+      .update({ autoSyncEnabled: !current })
+      .eq("id", propertyId);
+
+    if (error) {
+      // revert on failure
+      setIcalProperties((prev) =>
+        prev.map((p) =>
+          p.id === propertyId ? { ...p, autoSyncEnabled: current } : p
+        )
+      );
+    }
+
+    setTogglingId(null);
+  }
+
   async function handleThemeChange(value: "light" | "dark" | "system") {
     await setTheme(value);
     setSaved(true);
@@ -65,6 +128,7 @@ export default function SettingsPage() {
   if (!user) return null;
 
   const badge = ROLE_BADGE[user.role] || ROLE_BADGE.booker;
+  const canManageSync = user.role === "owner" || user.role === "ADMIN";
 
   return (
     <div
@@ -268,6 +332,150 @@ export default function SettingsPage() {
             ))}
           </div>
         </div>
+
+        {/* iCal Auto-Sync section — owner/ADMIN only */}
+        {canManageSync && (
+          <div
+            style={{
+              background: "var(--brand-surface, white)",
+              borderRadius: 16,
+              boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+              padding: "28px 28px",
+              marginBottom: 20,
+            }}
+          >
+            <div style={{ marginBottom: 20 }}>
+              <h2
+                style={{
+                  fontSize: 16,
+                  fontWeight: 700,
+                  color: "var(--brand-text, #1a2744)",
+                  marginBottom: 4,
+                }}
+              >
+                iCal Auto-Sync
+              </h2>
+              <p
+                style={{
+                  fontSize: 13,
+                  color: "var(--brand-text-muted, #8896a5)",
+                }}
+              >
+                Automatically pull bookings from Airbnb every few hours instead
+                of syncing manually from the iCal page
+              </p>
+            </div>
+
+            {icalLoading ? (
+              <p
+                style={{
+                  fontSize: 13,
+                  color: "var(--brand-text-muted, #8896a5)",
+                }}
+              >
+                Loading properties…
+              </p>
+            ) : icalProperties.length === 0 ? (
+              <p
+                style={{
+                  fontSize: 13,
+                  color: "var(--brand-text-muted, #8896a5)",
+                }}
+              >
+                No properties found.
+              </p>
+            ) : (
+              <div
+                style={{ display: "flex", flexDirection: "column", gap: 16 }}
+              >
+                {icalProperties.map((p, i) => (
+                  <div
+                    key={p.id}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      paddingBottom: 16,
+                      borderBottom:
+                        i < icalProperties.length - 1
+                          ? "1px solid var(--brand-border, #e8edf3)"
+                          : "none",
+                    }}
+                  >
+                    <div>
+                      <div
+                        style={{
+                          fontSize: 14,
+                          fontWeight: 600,
+                          color: "var(--brand-text, #1a2744)",
+                        }}
+                      >
+                        {p.name}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          color: "var(--brand-text-muted, #8896a5)",
+                          marginTop: 2,
+                        }}
+                      >
+                        {!p.airbnbIcalUrl
+                          ? "No Airbnb iCal URL set — add one on the iCal page"
+                          : p.lastSyncedAt
+                          ? `Last synced ${new Date(
+                              p.lastSyncedAt
+                            ).toLocaleString("en-PH")}${
+                              p.lastSyncStatus === "error"
+                                ? " — last attempt failed"
+                                : ""
+                            }`
+                          : "Never synced yet"}
+                      </div>
+                    </div>
+
+                    <button
+                      disabled={!p.airbnbIcalUrl || togglingId === p.id}
+                      onClick={() => toggleAutoSync(p.id, p.autoSyncEnabled)}
+                      style={{
+                        width: 44,
+                        height: 24,
+                        borderRadius: 999,
+                        border: "none",
+                        background: p.autoSyncEnabled
+                          ? "#2cb5b0"
+                          : "var(--brand-border, #e8edf3)",
+                        position: "relative",
+                        cursor: !p.airbnbIcalUrl ? "not-allowed" : "pointer",
+                        opacity: !p.airbnbIcalUrl
+                          ? 0.5
+                          : togglingId === p.id
+                          ? 0.6
+                          : 1,
+                        transition: "background 0.15s",
+                        flexShrink: 0,
+                      }}
+                      aria-label={`Toggle auto-sync for ${p.name}`}
+                    >
+                      <span
+                        style={{
+                          position: "absolute",
+                          top: 3,
+                          left: p.autoSyncEnabled ? 23 : 3,
+                          width: 18,
+                          height: 18,
+                          borderRadius: "50%",
+                          background: "white",
+                          boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+                          transition: "left 0.15s",
+                        }}
+                      />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Account info section */}
         <div

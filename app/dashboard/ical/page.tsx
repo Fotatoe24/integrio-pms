@@ -8,7 +8,10 @@ interface Property {
   name: string;
   airbnbIcalUrl: string | null;
   ourIcalToken: string;
-  lastSync: { fetchedAt: string; userAgent: string } | null; // ← add this
+  autoSyncEnabled: boolean;
+  lastSyncedAt: string | null;
+  lastSyncStatus: string | null;
+  lastSync: { fetchedAt: string; userAgent: string } | null;
 }
 
 export default function IcalPage() {
@@ -26,10 +29,11 @@ export default function IcalPage() {
     setLoading(true);
     const { data } = await supabase
       .from("Property")
-      .select("id, name, airbnbIcalUrl, ourIcalToken");
+      .select(
+        "id, name, airbnbIcalUrl, ourIcalToken, autoSyncEnabled, lastSyncedAt, lastSyncStatus"
+      );
 
     if (data) {
-      // ✅ ADD HERE — fetch last sync for each property
       const withSync = await Promise.all(
         data.map(async (p) => {
           const { data: log } = await supabase
@@ -76,6 +80,9 @@ export default function IcalPage() {
           data.imported !== 1 ? "s" : ""
         } imported, ${data.skipped} already existed.`,
       }));
+
+      // refresh so lastSyncedAt reflects the sync we just triggered
+      loadProperties();
     } catch (err) {
       setResults((r) => ({
         ...r,
@@ -135,7 +142,7 @@ export default function IcalPage() {
             {
               icon: "⬇️",
               title: "Import from Airbnb",
-              desc: "Paste your Airbnb iCal URL in the property settings, then click Sync to import bookings.",
+              desc: "Paste your Airbnb iCal URL in the property settings, then click Sync to import bookings — or turn on Auto-Sync in Settings to have it run automatically.",
             },
             {
               icon: "⬆️",
@@ -212,16 +219,38 @@ export default function IcalPage() {
                 boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
               }}
             >
-              <h3
+              <div
                 style={{
-                  fontSize: 18,
-                  fontWeight: 700,
-                  color: "var(--brand-text)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
                   marginBottom: 20,
                 }}
               >
-                🏠 {p.name}
-              </h3>
+                <h3
+                  style={{
+                    fontSize: 18,
+                    fontWeight: 700,
+                    color: "var(--brand-text)",
+                  }}
+                >
+                  🏠 {p.name}
+                </h3>
+                {p.autoSyncEnabled && (
+                  <span
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: "#155724",
+                      background: "#d4edda",
+                      borderRadius: 20,
+                      padding: "4px 10px",
+                    }}
+                  >
+                    🔁 Auto-Sync ON
+                  </span>
+                )}
+              </div>
 
               <div
                 style={{
@@ -261,24 +290,85 @@ export default function IcalPage() {
                       >
                         {p.airbnbIcalUrl}
                       </div>
-                      <button
-                        onClick={() => syncAirbnb(p)}
-                        disabled={syncing === p.id}
-                        style={{
-                          background:
-                            "linear-gradient(135deg, #1a2744, #2cb5b0)",
-                          color: "white",
-                          border: "none",
-                          borderRadius: 10,
-                          padding: "10px 20px",
-                          fontSize: 13,
-                          fontWeight: 600,
-                          cursor: "pointer",
-                          opacity: syncing === p.id ? 0.7 : 1,
-                        }}
-                      >
-                        {syncing === p.id ? "⏳ Syncing..." : "↻ Sync Now"}
-                      </button>
+
+                      {p.autoSyncEnabled ? (
+                        <>
+                          <div
+                            style={{
+                              fontSize: 13,
+                              color: "#27ae60",
+                              marginBottom: 8,
+                            }}
+                          >
+                            {p.lastSyncedAt ? (
+                              <>
+                                🟢 Auto-synced{" "}
+                                {new Date(p.lastSyncedAt).toLocaleString(
+                                  "en-PH"
+                                )}
+                                {p.lastSyncStatus === "error" &&
+                                  " (last attempt failed, will retry)"}
+                              </>
+                            ) : (
+                              "🟡 Auto-sync enabled — waiting for first run"
+                            )}
+                          </div>
+                          <button
+                            onClick={() => syncAirbnb(p)}
+                            disabled={syncing === p.id}
+                            style={{
+                              background: "transparent",
+                              color: "#2cb5b0",
+                              border: "1.5px solid #2cb5b0",
+                              borderRadius: 10,
+                              padding: "8px 16px",
+                              fontSize: 12,
+                              fontWeight: 600,
+                              cursor: "pointer",
+                              opacity: syncing === p.id ? 0.7 : 1,
+                            }}
+                          >
+                            {syncing === p.id
+                              ? "⏳ Syncing..."
+                              : "↻ Sync now anyway"}
+                          </button>
+                          <div
+                            style={{
+                              fontSize: 12,
+                              color: "var(--brand-text-muted)",
+                              marginTop: 8,
+                            }}
+                          >
+                            Manage this in{" "}
+                            <a
+                              href="/settings"
+                              style={{ color: "#2cb5b0", fontWeight: 600 }}
+                            >
+                              Settings →
+                            </a>
+                          </div>
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => syncAirbnb(p)}
+                          disabled={syncing === p.id}
+                          style={{
+                            background:
+                              "linear-gradient(135deg, #1a2744, #2cb5b0)",
+                            color: "white",
+                            border: "none",
+                            borderRadius: 10,
+                            padding: "10px 20px",
+                            fontSize: 13,
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            opacity: syncing === p.id ? 0.7 : 1,
+                          }}
+                        >
+                          {syncing === p.id ? "⏳ Syncing..." : "↻ Sync Now"}
+                        </button>
+                      )}
+
                       {results[p.id] && (
                         <div
                           style={{
