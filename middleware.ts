@@ -12,7 +12,10 @@ const publicRoutes = [
   "/api/invite-employee",
   "/api/forgot-password",
   "/api/reset-password",
+  "/api/cron",
+  "/api/sync-ical",
 ];
+
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const isPublic = publicRoutes.some((route) => pathname.startsWith(route));
