@@ -5,14 +5,7 @@
 // since ManyChat is an external caller, not a logged-in user.
 
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-
-// Use the service role key here (server-side only), not the anon key,
-// since this route runs with no logged-in user session.
-const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { supabaseAdmin as supabase } from "@/lib/supabase-server";
 
 // Shared secret ManyChat sends in a header. Set this in ManyChat's
 // External Request config under "Headers".
