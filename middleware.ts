@@ -14,6 +14,7 @@ const publicRoutes = [
   "/api/reset-password",
   "/api/cron",
   "/api/sync-ical",
+  "/api/bot/availability",
 ];
 
 export function middleware(req: NextRequest) {
