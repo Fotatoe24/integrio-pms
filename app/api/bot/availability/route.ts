@@ -91,82 +91,120 @@ function checkConflict(
 }
 
 export async function POST(req: NextRequest) {
-  // 1. Verify the request actually came from ManyChat
-  const key = req.headers.get("x-bot-service-key");
-  if (key !== BOT_SERVICE_KEY) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  try {
+    // 1. Verify the request actually came from ManyChat
+    const key = req.headers.get("x-bot-service-key");
+    if (key !== BOT_SERVICE_KEY) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-  // 2. Parse what ManyChat sent (mapped from the guest's chat inputs)
-  const body = await req.json();
-  const { checkInDate, checkOutDate, stayType, ownerId } = body as {
-    checkInDate: string; // "2026-07-10"
-    checkOutDate: string; // "2026-07-12"
-    stayType: StayType; // must exactly match one of the RATES keys
-    ownerId: string; // scopes to the right owner's properties
-  };
+    // 2. Parse what ManyChat sent (mapped from the guest's chat inputs).
+    //    A missing/empty/malformed body throws here — caught below instead
+    //    of crashing with a blank 500.
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json(
+        { error: "Request body is missing or not valid JSON" },
+        { status: 400 }
+      );
+    }
 
-  if (!checkInDate || !checkOutDate || !stayType || !ownerId) {
+    const { checkInDate, checkOutDate, stayType, ownerId } = body as {
+      checkInDate: string; // "2026-07-10"
+      checkOutDate: string; // "2026-07-12"
+      stayType: StayType; // must exactly match one of the RATES keys
+      ownerId: string; // scopes to the right owner's properties
+    };
+
+    if (!checkInDate || !checkOutDate || !stayType || !ownerId) {
+      return NextResponse.json(
+        { error: "Missing required fields" },
+        { status: 400 }
+      );
+    }
+
+    const rateTimes = RATE_TIMES[stayType];
+    if (!rateTimes) {
+      return NextResponse.json(
+        { error: `Unknown stayType: ${stayType}` },
+        { status: 400 }
+      );
+    }
+
+    // 3. Pull all properties for this owner, in a fixed order.
+    //    ManyChat's Response Mapping uses positional JSON paths like
+    //    results[0], results[1] — without an explicit order, Supabase
+    //    doesn't guarantee row order, which would silently break mapping.
+    const { data: properties, error: propError } = await supabase
+      .from("Property")
+      .select('"id", "name"')
+      .eq("owner_id", ownerId)
+      .order("name", { ascending: true });
+
+    if (propError || !properties) {
+      return NextResponse.json(
+        { error: "Could not load properties", details: propError?.message },
+        { status: 500 }
+      );
+    }
+
+    if (properties.length === 0) {
+      return NextResponse.json(
+        { error: "No properties found for this ownerId" },
+        { status: 404 }
+      );
+    }
+
+    // 4. Pull bookings for these properties that could possibly overlap.
+    const propertyIds = properties.map((p) => p.id);
+    const { data: bookings, error: bookingError } = await supabase
+      .from("Booking")
+      .select(
+        '"id", "propertyId", "checkIn", "checkInTime", "checkOut", "checkOutTime", "stayType", "status"'
+      )
+      .in("propertyId", propertyIds)
+      .lte("checkIn", checkOutDate)
+      .gte("checkOut", checkInDate);
+
+    if (bookingError) {
+      return NextResponse.json(
+        { error: "Could not load bookings", details: bookingError.message },
+        { status: 500 }
+      );
+    }
+
+    // 5. Run the same slot-conflict logic used on the dashboard for each unit
+    const results = properties.map((property) => {
+      const status = checkConflict(
+        (bookings as ExistingBooking[]) ?? [],
+        property.id,
+        checkInDate,
+        checkOutDate,
+        stayType,
+        rateTimes.checkInTime,
+        rateTimes.checkOutTime
+      );
+      return { propertyId: property.id, name: property.name, status };
+    });
+
+    // 6. Build one pre-formatted summary string. ManyChat's Free plan caps
+    //    custom fields at 3 for non-subscribers, so mapping one field per
+    //    property (results[0].status, results[1].status, ...) doesn't
+    //    scale. A single "summary" field works regardless of plan tier or
+    //    how many properties you add later.
+    const summary = results.map((r) => `${r.name}: ${r.status}`).join("\n");
+
+    // Still return the raw array too, in case it's useful for anything
+    // else later (e.g. a paid-plan flow that branches per unit).
+    return NextResponse.json({ results, summary });
+  } catch (err) {
+    // Catch-all so ManyChat always gets a real JSON error instead of a
+    // blank 500 with no body.
     return NextResponse.json(
-      { error: "Missing required fields" },
-      { status: 400 }
-    );
-  }
-
-  const rateTimes = RATE_TIMES[stayType];
-  if (!rateTimes) {
-    return NextResponse.json(
-      { error: `Unknown stayType: ${stayType}` },
-      { status: 400 }
-    );
-  }
-
-  // 3. Pull all properties for this owner
-  const { data: properties, error: propError } = await supabase
-    .from("Property")
-    .select('"id", "name"')
-    .eq("owner_id", ownerId);
-
-  if (propError || !properties) {
-    return NextResponse.json(
-      { error: "Could not load properties" },
+      { error: "Unexpected server error", details: (err as Error).message },
       { status: 500 }
     );
   }
-
-  // 4. Pull bookings for these properties that could possibly overlap.
-  const propertyIds = properties.map((p) => p.id);
-  const { data: bookings, error: bookingError } = await supabase
-    .from("Booking")
-    .select(
-      '"id", "propertyId", "checkIn", "checkInTime", "checkOut", "checkOutTime", "stayType", "status"'
-    )
-    .in("propertyId", propertyIds)
-    .lte("checkIn", checkOutDate)
-    .gte("checkOut", checkInDate);
-
-  if (bookingError) {
-    return NextResponse.json(
-      { error: "Could not load bookings" },
-      { status: 500 }
-    );
-  }
-
-  // 5. Run the same slot-conflict logic used on the dashboard for each unit
-  const results = properties.map((property) => {
-    const status = checkConflict(
-      (bookings as ExistingBooking[]) ?? [],
-      property.id,
-      checkInDate,
-      checkOutDate,
-      stayType,
-      rateTimes.checkInTime,
-      rateTimes.checkOutTime
-    );
-    return { propertyId: property.id, name: property.name, status };
-  });
-
-  // 6. Return a simple, flat JSON shape ManyChat can map with JSON Path
-  //    (e.g. $.results[0].status) into custom fields or reply text.
-  return NextResponse.json({ results });
 }
