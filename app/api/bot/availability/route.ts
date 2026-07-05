@@ -194,7 +194,12 @@ export async function POST(req: NextRequest) {
     //    property (results[0].status, results[1].status, ...) doesn't
     //    scale. A single "summary" field works regardless of plan tier or
     //    how many properties you add later.
-    const summary = results.map((r) => `${r.name}: ${r.status}`).join("\n");
+    // "Partial" still represents a bookable slot (e.g. Day-Short + Night-Short same day)
+    const hasAvailable = results.some((r) => r.status !== "Fully Booked");
+
+    const summary = hasAvailable
+      ? "Yes, we have availability for those dates! Want to book? Just reply and our team will help you finish up!"
+      : "Sorry, we're fully booked for those dates. Would you like to try different dates?";
 
     // Still return the raw array too, in case it's useful for anything
     // else later (e.g. a paid-plan flow that branches per unit).
