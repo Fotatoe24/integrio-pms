@@ -45,13 +45,26 @@ export async function POST(req: NextRequest) {
     // 0 bookings on that date = Available, 1 short-stay = Partial, 2 short-stays or 1 Day Long = Fully Booked
     // Adjust table/column names below to match your actual schema if this differs
     // from your existing bot/availability route.
+    // Properties are named e.g. "Unit 1845", not bare "1845" — match by substring, not exact equality
+    const nameFilter = PROPERTY_ORDER.map((u) => `name.ilike.%${u}%`).join(",");
     const { data: properties, error: propError } = await supabaseAdmin
       .from("Property")
       .select('"id", "name"')
-      .in("name", PROPERTY_ORDER)
+      .or(nameFilter)
       .order("name", { ascending: true });
 
     if (propError) throw propError;
+
+    if (!properties || properties.length === 0) {
+      console.error(
+        "parse-availability: no properties matched PROPERTY_ORDER filter"
+      );
+      return NextResponse.json({
+        success: false,
+        summary:
+          "Sorry, may issue kami sa pag-check ng availability. Please try again later.",
+      });
+    }
 
     const results: { unit: string; status: string }[] = [];
 
@@ -85,7 +98,7 @@ export async function POST(req: NextRequest) {
     );
 
     const summary = hasAvailability
-      ? `Yes po, may available kami sa ${dateStr}! gusto nyo po bang mag pareserve?. 😊`
+      ? `Yes po, may available kami sa ${dateStr}! Gusto nyo po bang ipa-reserve ang araw na ito?. 😊`
       : `Pasensya na po, fully booked na po kami sa ${dateStr}. Baka may ibang date po kayo in mind?`;
 
     return NextResponse.json({
