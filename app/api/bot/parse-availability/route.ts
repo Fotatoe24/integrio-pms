@@ -66,7 +66,11 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const results: { unit: string; status: string }[] = [];
+    const DAY_SHORT = "Day (Short) 8AM-8PM";
+    const NIGHT_SHORT = "Night (Short) 9PM-7AM";
+    const DAY_LONG = "Day (Long) 2PM-11AM";
+
+    const results: { unit: string; status: string; openTypes: string[] }[] = [];
 
     for (const property of properties ?? []) {
       const { data: bookings, error: bookingError } = await supabaseAdmin
@@ -79,27 +83,41 @@ export async function POST(req: NextRequest) {
       if (bookingError) throw bookingError;
 
       let status = "Available";
+      let openTypes: string[] = [DAY_SHORT, NIGHT_SHORT, DAY_LONG];
+
       if (bookings && bookings.length > 0) {
-        const hasDayLong = bookings.some(
-          (b) => b.stayType === "Day (Long) 2PM-11AM"
-        );
+        const hasDayLong = bookings.some((b) => b.stayType === DAY_LONG);
         if (hasDayLong || bookings.length >= 2) {
           status = "Fully Booked";
+          openTypes = [];
         } else {
           status = "Partial";
+          // One short-stay slot is taken — only the other short-stay type remains open.
+          // A Day (Long) is no longer possible once any slot that day is booked.
+          const takenType = bookings[0].stayType;
+          openTypes = takenType === DAY_SHORT ? [NIGHT_SHORT] : [DAY_SHORT];
         }
       }
 
-      results.push({ unit: property.name, status });
+      results.push({ unit: property.name, status, openTypes });
     }
 
-    const hasAvailability = results.some(
-      (r) => r.status === "Available" || r.status === "Partial"
-    );
+    const fullyAvailable = results.some((r) => r.status === "Available");
+    const partialUnits = results.filter((r) => r.status === "Partial");
 
-    const summary = hasAvailability
-      ? `Yes po, may available kami sa ${dateStr}! Gusto nyo po bang ipa-reserve ang araw na ito?. 😊`
-      : `Pasensya na po, fully booked na po kami sa ${dateStr}. Baka may ibang date po kayo in mind?`;
+    let summary: string;
+
+    if (fullyAvailable) {
+      summary = `Yes po, may available kami sa ${dateStr}! Message us to book. 😊`;
+    } else if (partialUnits.length > 0) {
+      const distinctOpenTypes = Array.from(
+        new Set(partialUnits.flatMap((u) => u.openTypes))
+      );
+      const typesList = distinctOpenTypes.join(" or ");
+      summary = `May available pa po kami sa ${dateStr}, pero ${typesList} na lang po ang bakante. Message us to book! 😊`;
+    } else {
+      summary = `Pasensya na po, fully booked na po kami sa ${dateStr}. Baka may ibang date po kayo in mind?`;
+    }
 
     return NextResponse.json({
       success: true,
