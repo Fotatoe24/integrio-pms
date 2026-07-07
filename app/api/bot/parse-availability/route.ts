@@ -80,16 +80,20 @@ export async function POST(req: NextRequest) {
       results.push({ unit: property.name, status });
     }
 
-    const summary = results
-      .map((r) => `Unit ${r.unit}: ${r.status}`)
-      .join("\n");
+    const hasAvailability = results.some(
+      (r) => r.status === "Available" || r.status === "Partial"
+    );
+
+    const summary = hasAvailability
+      ? `Yes po, may available kami sa ${dateStr}! gusto nyo po bang mag pareserve?. 😊`
+      : `Pasensya na po, fully booked na po kami sa ${dateStr}. Baka may ibang date po kayo in mind?`;
 
     return NextResponse.json({
       success: true,
       date: dateStr,
       matched_text: extracted.matchedText,
       results,
-      summary: `Availability for ${dateStr}:\n${summary}`,
+      summary,
     });
   } catch (err) {
     console.error("parse-availability error:", err);
