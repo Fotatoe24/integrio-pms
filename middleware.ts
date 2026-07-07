@@ -15,6 +15,7 @@ const publicRoutes = [
   "/api/cron",
   "/api/sync-ical",
   "/api/bot/availability",
+  "/api/bot/parse-availability",
 ];
 
 export function middleware(req: NextRequest) {
