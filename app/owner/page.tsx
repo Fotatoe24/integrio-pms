@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { requireRole, IntegrioUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
@@ -14,6 +14,8 @@ type Tab =
   | "Payments"
   | "Bookings"
   | "Calendar";
+
+type OverviewMode = "week" | "month";
 
 interface Employee {
   id: string;
@@ -66,6 +68,10 @@ interface Booking {
   totalFee: number | null;
   status: string;
   source: string;
+  // NOTE: adjust this field name to whatever your `Booking` table actually
+  // uses to record which employee took/created the booking (e.g. "bookedBy",
+  // "createdBy", "bookerId"). It drives the commission leaderboard below.
+  bookedBy?: string | null;
   Property?: { name: string };
   Payment?: Payment[];
 }
@@ -76,6 +82,12 @@ interface Property {
 }
 
 const ROLES = ["booker", "auditor", "housekeeping"];
+
+// Flat commission paid per booking handled (not a percentage). Change this
+// if your actual rate differs.
+const COMMISSION_PER_BOOKING = 100;
+const BOOKINGS_PER_PAGE = 8;
+const PAYMENTS_PER_PAGE = 8;
 
 const ROLE_COLORS: Record<string, { bg: string; color: string }> = {
   booker: { bg: "#d1ecf1", color: "#0c5460" },
@@ -109,6 +121,149 @@ const CATEGORY_COLORS: Record<string, { bg: string; color: string }> = {
   other: { bg: "#e8d5f5", color: "#5a2d82" },
 };
 
+// ── Date range helpers ──────────────────────────────────────────────────
+
+function startOfDay(d: Date) {
+  const c = new Date(d);
+  c.setHours(0, 0, 0, 0);
+  return c;
+}
+
+function endOfDay(d: Date) {
+  const c = new Date(d);
+  c.setHours(23, 59, 59, 999);
+  return c;
+}
+
+function getWeekRange(base: Date): [Date, Date] {
+  const d = new Date(base);
+  const day = d.getDay(); // 0 = Sun ... 6 = Sat
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  const monday = new Date(d);
+  monday.setDate(d.getDate() + diffToMonday);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  return [startOfDay(monday), endOfDay(sunday)];
+}
+
+function getMonthRange(base: Date, offset: number): [Date, Date] {
+  const start = new Date(base.getFullYear(), base.getMonth() + offset, 1);
+  const end = new Date(
+    base.getFullYear(),
+    base.getMonth() + offset + 1,
+    0,
+    23,
+    59,
+    59,
+    999
+  );
+  return [startOfDay(start), end];
+}
+
+function inRange(iso: string | null | undefined, range: [Date, Date]) {
+  if (!iso) return false;
+  const t = new Date(iso).getTime();
+  return t >= range[0].getTime() && t <= range[1].getTime();
+}
+
+function formatRangeLabel(range: [Date, Date], mode: OverviewMode) {
+  if (mode === "month") {
+    return range[0].toLocaleDateString("en-PH", {
+      month: "long",
+      year: "numeric",
+    });
+  }
+  const startLabel = range[0].toLocaleDateString("en-PH", {
+    month: "short",
+    day: "numeric",
+  });
+  const endLabel = range[1].toLocaleDateString("en-PH", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+  return `${startLabel} – ${endLabel}`;
+}
+
+// ── Shared stat computation (used for both period + tab totals) ────────
+
+interface StatBundle {
+  totalIncome: number;
+  totalExpenses: number;
+  netIncome: number;
+  collectedRevenue: number;
+  expectedRevenue: number;
+  pendingCollection: number;
+  collectionPct: number;
+  bookingsCount: number;
+}
+
+function computeStats(
+  bookingsSubset: Booking[],
+  paymentsSubset: Payment[],
+  expensesSubset: ExpenseNote[]
+): StatBundle {
+  const totalIncome = paymentsSubset
+    .filter((p) => p.status === "PAID")
+    .reduce((s, p) => s + Number(p.amount), 0);
+  const totalExpenses = expensesSubset.reduce(
+    (s, n) => s + Number(n.amount),
+    0
+  );
+  const pendingCollection = paymentsSubset
+    .filter((p) => p.status === "PENDING")
+    .reduce((s, p) => s + Number(p.amount), 0);
+  const netIncome = totalIncome - totalExpenses;
+
+  const collectedRevenue = bookingsSubset.reduce((sum, b) => {
+    const paid = (b.Payment || [])
+      .filter(
+        (p) =>
+          p.status === "PAID" && (p.type === "DOWNPAYMENT" || p.type === "FULL")
+      )
+      .reduce((s, p) => s + Number(p.amount), 0);
+    return sum + paid;
+  }, 0);
+
+  const expectedRevenue = bookingsSubset
+    .filter((b) => b.status !== "CANCELLED")
+    .reduce((sum, b) => sum + Number(b.totalFee || 0), 0);
+
+  const collectionPct =
+    expectedRevenue > 0
+      ? Math.min(100, Math.round((collectedRevenue / expectedRevenue) * 100))
+      : 0;
+
+  return {
+    totalIncome,
+    totalExpenses,
+    netIncome,
+    collectedRevenue,
+    expectedRevenue,
+    pendingCollection,
+    collectionPct,
+    bookingsCount: bookingsSubset.length,
+  };
+}
+
+function getBookingPaymentBreakdown(b: Booking) {
+  const paidPayments = (b.Payment || []).filter((p) => p.status === "PAID");
+  const downPayment = paidPayments
+    .filter((p) => p.type === "DOWNPAYMENT")
+    .reduce((s, p) => s + Number(p.amount), 0);
+  const totalPaid = paidPayments.reduce((s, p) => s + Number(p.amount), 0);
+  const totalCost = Number(b.totalFee || 0);
+  const balance = Math.max(0, totalCost - totalPaid);
+  return { downPayment, totalPaid, totalCost, balance };
+}
+
+function getBookingPaymentState(b: Booking) {
+  const { totalPaid, totalCost } = getBookingPaymentBreakdown(b);
+  if (totalPaid <= 0) return "UNPAID";
+  if (totalPaid >= totalCost && totalCost > 0) return "FULLY_PAID";
+  return "PARTIAL";
+}
+
 export default function OwnerPage() {
   const router = useRouter();
   const [user, setUser] = useState<IntegrioUser | null>(null);
@@ -140,6 +295,14 @@ export default function OwnerPage() {
   const [filterBookingStatus, setFilterBookingStatus] = useState("ALL");
   const [filterPaymentState, setFilterPaymentState] = useState("ALL");
   const [bookingSearch, setBookingSearch] = useState("");
+
+  // Pagination
+  const [bookingsPage, setBookingsPage] = useState(1);
+  const [paymentsPage, setPaymentsPage] = useState(1);
+
+  // Overview period filter
+  const [overviewMode, setOverviewMode] = useState<OverviewMode>("week");
+  const [monthOffset, setMonthOffset] = useState(0);
 
   useEffect(() => {
     document.title = "Owner — Integrio";
@@ -328,6 +491,10 @@ export default function OwnerPage() {
     });
   }
 
+  function formatCurrency(n: number) {
+    return `₱${n.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`;
+  }
+
   function logout() {
     localStorage.removeItem("integrio_user");
     document.cookie = "auth-token=; max-age=0; path=/";
@@ -340,71 +507,86 @@ export default function OwnerPage() {
     );
   }
 
-  // Stats
-  const totalIncome = payments
-    .filter((p) => p.status === "PAID")
-    .reduce((s, p) => s + Number(p.amount), 0);
-  const totalExpenses = expenseNotes.reduce((s, n) => s + Number(n.amount), 0);
-  const pendingCollection = payments
-    .filter((p) => p.status === "PENDING")
-    .reduce((s, p) => s + Number(p.amount), 0);
-  const netIncome = totalIncome - totalExpenses;
+  // ── Period range for Overview ─────────────────────────────────────────
+  const periodRange = useMemo<[Date, Date]>(() => {
+    const now = new Date();
+    return overviewMode === "week"
+      ? getWeekRange(now)
+      : getMonthRange(now, monthOffset);
+  }, [overviewMode, monthOffset]);
+
+  const periodLabel = useMemo(
+    () => formatRangeLabel(periodRange, overviewMode),
+    [periodRange, overviewMode]
+  );
+
+  const periodBookings = useMemo(
+    () => bookings.filter((b) => inRange(b.checkIn, periodRange)),
+    [bookings, periodRange]
+  );
+  const periodPayments = useMemo(
+    () => payments.filter((p) => inRange(p.paidAt, periodRange)),
+    [payments, periodRange]
+  );
+  const periodExpenses = useMemo(
+    () => expenseNotes.filter((n) => inRange(n.createdAt, periodRange)),
+    [expenseNotes, periodRange]
+  );
+
+  const periodStats = useMemo(
+    () => computeStats(periodBookings, periodPayments, periodExpenses),
+    [periodBookings, periodPayments, periodExpenses]
+  );
+
+  // Real-time (not period-scoped) counters — these describe current state,
+  // not activity within the selected window.
   const activeBookings = bookings.filter(
     (b) => b.status === "CHECKED_IN"
   ).length;
+  const activeTeamSize = employees.filter((e) => e.status !== "revoked").length;
 
-  // Collected revenue = sum of DOWNPAYMENT + FULL payments (PAID)
-  const collectedRevenue = bookings.reduce((sum, b) => {
-    const paid = (b.Payment || [])
-      .filter(
-        (p) =>
-          p.status === "PAID" && (p.type === "DOWNPAYMENT" || p.type === "FULL")
-      )
-      .reduce((s, p) => s + Number(p.amount), 0);
-    return sum + paid;
-  }, 0);
-
-  // Expected revenue = sum of totalFee across all bookings (excluding cancelled)
-  const expectedRevenue = bookings
-    .filter((b) => b.status !== "CANCELLED")
-    .reduce((sum, b) => sum + Number(b.totalFee || 0), 0);
-
-  // Payment status per booking
-  function getBookingPaymentState(b: Booking) {
-    const paid = (b.Payment || [])
-      .filter((p) => p.status === "PAID")
-      .reduce((s, p) => s + Number(p.amount), 0);
-    const total = b.totalFee || 0;
-    if (paid <= 0) return "UNPAID";
-    if (paid >= total && total > 0) return "FULLY_PAID";
-    return "PARTIAL";
+  function shiftMonth(delta: number) {
+    setOverviewMode("month");
+    setMonthOffset((m) => m + delta);
   }
 
-  const fullyPaidCount = bookings.filter(
-    (b) =>
-      b.status !== "CANCELLED" && getBookingPaymentState(b) === "FULLY_PAID"
-  ).length;
-  const notFullyPaidCount = bookings.filter(
-    (b) =>
-      b.status !== "CANCELLED" && getBookingPaymentState(b) !== "FULLY_PAID"
-  ).length;
+  // ── Commission leaderboard ──────────────────────────────────────────
+  // Commission is a flat ₱100 per booking a person personally handled/guided
+  // (not a cut of revenue). The owner can earn it too, since you personally
+  // guide guests sometimes — so the owner is included alongside employees.
+  // Cancelled bookings don't count.
+  const leaderboard = useMemo(() => {
+    const people: { id: string; name: string; role: string }[] = [
+      ...(user ? [{ id: user.id, name: user.name, role: "owner" }] : []),
+      ...employees
+        .filter((e) => e.status !== "revoked")
+        .map((e) => ({ id: e.id, name: e.name, role: e.role })),
+    ];
 
-  // Bookings whose check-in falls in the current calendar month
-  const now = new Date();
-  const bookingsThisMonth = bookings.filter((b) => {
-    const d = new Date(b.checkIn);
-    return (
-      d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
-    );
-  }).length;
+    return people
+      .map((person) => {
+        const personBookings = bookings.filter(
+          (b) => b.bookedBy === person.id && b.status !== "CANCELLED"
+        );
+        const revenueGenerated = personBookings.reduce((sum, b) => {
+          const paid = (b.Payment || [])
+            .filter((p) => p.status === "PAID")
+            .reduce((s, p) => s + Number(p.amount), 0);
+          return sum + paid;
+        }, 0);
+        return {
+          person,
+          bookingsCount: personBookings.length,
+          revenueGenerated,
+          commission: personBookings.length * COMMISSION_PER_BOOKING,
+        };
+      })
+      .sort((a, b) => b.commission - a.commission);
+  }, [employees, bookings, user]);
 
-  // % of expected revenue collected so far
-  const collectionPct =
-    expectedRevenue > 0
-      ? Math.min(100, Math.round((collectedRevenue / expectedRevenue) * 100))
-      : 0;
+  const hasAttributedBookings = bookings.some((b) => !!b.bookedBy);
 
-  // Filtered bookings for the Bookings tab
+  // ── Filtered + paginated bookings ───────────────────────────────────
   const filteredBookings = bookings.filter((b) => {
     if (filterBookingStatus !== "ALL" && b.status !== filterBookingStatus)
       return false;
@@ -424,6 +606,35 @@ export default function OwnerPage() {
     }
     return true;
   });
+
+  useEffect(() => {
+    setBookingsPage(1);
+  }, [
+    filterProperty,
+    filterPlatform,
+    filterBookingStatus,
+    filterPaymentState,
+    bookingSearch,
+  ]);
+
+  const totalBookingsPages = Math.max(
+    1,
+    Math.ceil(filteredBookings.length / BOOKINGS_PER_PAGE)
+  );
+  const paginatedBookings = filteredBookings.slice(
+    (bookingsPage - 1) * BOOKINGS_PER_PAGE,
+    bookingsPage * BOOKINGS_PER_PAGE
+  );
+
+  const totalPaymentsPages = Math.max(
+    1,
+    Math.ceil(payments.length / PAYMENTS_PER_PAGE)
+  );
+  const paginatedPayments = payments.slice(
+    (paymentsPage - 1) * PAYMENTS_PER_PAGE,
+    paymentsPage * PAYMENTS_PER_PAGE
+  );
+
   const TABS: Tab[] = [
     "Overview",
     "Employees",
@@ -455,6 +666,18 @@ export default function OwnerPage() {
     letterSpacing: "0.06em",
     marginBottom: 8,
   };
+
+  const paginationBtnStyle = (disabled: boolean): React.CSSProperties => ({
+    padding: "8px 16px",
+    borderRadius: 8,
+    fontSize: 13,
+    fontWeight: 600,
+    border: "1.5px solid var(--brand-border)",
+    background: "var(--brand-surface)",
+    color: disabled ? "var(--brand-text-muted)" : "var(--brand-text)",
+    cursor: disabled ? "not-allowed" : "pointer",
+    opacity: disabled ? 0.5 : 1,
+  });
 
   if (!user) return null;
 
@@ -556,6 +779,8 @@ export default function OwnerPage() {
             alignItems: "center",
             justifyContent: "space-between",
             marginBottom: 28,
+            flexWrap: "wrap",
+            gap: 16,
           }}
         >
           <div>
@@ -573,6 +798,83 @@ export default function OwnerPage() {
               Full visibility across all operations
             </p>
           </div>
+
+          {activeTab === "Overview" && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                flexWrap: "wrap",
+              }}
+            >
+              {overviewMode === "month" && (
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <button
+                    onClick={() => shiftMonth(-1)}
+                    aria-label="Previous month"
+                    style={paginationBtnStyle(false)}
+                  >
+                    ‹
+                  </button>
+                  <span
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 600,
+                      color: "var(--brand-text)",
+                      minWidth: 130,
+                      textAlign: "center",
+                    }}
+                  >
+                    {periodLabel}
+                  </span>
+                  <button
+                    onClick={() => shiftMonth(1)}
+                    aria-label="Next month"
+                    style={paginationBtnStyle(false)}
+                  >
+                    ›
+                  </button>
+                </div>
+              )}
+              <div
+                style={{
+                  display: "flex",
+                  border: "1.5px solid var(--brand-border)",
+                  borderRadius: 10,
+                  overflow: "hidden",
+                }}
+              >
+                {(["week", "month"] as OverviewMode[]).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => {
+                      setOverviewMode(m);
+                      if (m === "month") setMonthOffset(0);
+                    }}
+                    style={{
+                      padding: "8px 16px",
+                      fontSize: 13,
+                      fontWeight: 600,
+                      border: "none",
+                      cursor: "pointer",
+                      background:
+                        overviewMode === m
+                          ? "var(--brand-text)"
+                          : "var(--brand-surface)",
+                      color:
+                        overviewMode === m
+                          ? "var(--background)"
+                          : "var(--brand-text-muted)",
+                    }}
+                  >
+                    {m === "week" ? "Weekly" : "Monthly"}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {activeTab === "Employees" && (
             <button
               onClick={() => {
@@ -612,69 +914,32 @@ export default function OwnerPage() {
           </div>
         ) : (
           <>
-            {/* Net income hero + collection progress + quick stats */}
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: 16,
-                marginBottom: 28,
-              }}
-            >
-              {/* Net income hero */}
-              <div
-                style={{
-                  background: "var(--brand-surface)",
-                  border: "1px solid var(--brand-border)",
-                  borderRadius: 16,
-                  padding: "28px 28px",
-                  display: "flex",
-                  alignItems: "flex-start",
-                  justifyContent: "space-between",
-                  flexWrap: "wrap",
-                  gap: 24,
-                }}
-              >
-                <div>
+            {/* ── Overview ── */}
+            {activeTab === "Overview" && (
+              <>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 16,
+                    marginBottom: 28,
+                  }}
+                >
+                  {/* Net income hero */}
                   <div
                     style={{
-                      fontSize: 11,
-                      fontWeight: 600,
-                      color: "var(--brand-text-muted)",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.06em",
-                      marginBottom: 12,
+                      background: "var(--brand-surface)",
+                      border: "1px solid var(--brand-border)",
+                      borderRadius: 16,
+                      padding: "28px 28px",
+                      display: "flex",
+                      alignItems: "flex-start",
+                      justifyContent: "space-between",
+                      flexWrap: "wrap",
+                      gap: 24,
                     }}
                   >
-                    Net income
-                  </div>
-                  <div
-                    style={{
-                      fontSize: 36,
-                      fontWeight: 700,
-                      color: "var(--brand-text)",
-                      marginBottom: 6,
-                      lineHeight: 1.1,
-                    }}
-                  >
-                    ₱
-                    {netIncome.toLocaleString("en-PH", {
-                      minimumFractionDigits: 2,
-                    })}
-                  </div>
-                  <div
-                    style={{ fontSize: 13, color: "var(--brand-text-muted)" }}
-                  >
-                    Income minus expenses
-                  </div>
-                </div>
-                <div style={{ display: "flex", gap: 32, flexWrap: "wrap" }}>
-                  {[
-                    { label: "Collected", value: collectedRevenue },
-                    { label: "Expected", value: expectedRevenue },
-                    { label: "Expenses", value: totalExpenses },
-                  ].map((item) => (
-                    <div key={item.label} style={{ textAlign: "right" }}>
+                    <div>
                       <div
                         style={{
                           fontSize: 11,
@@ -682,169 +947,375 @@ export default function OwnerPage() {
                           color: "var(--brand-text-muted)",
                           textTransform: "uppercase",
                           letterSpacing: "0.06em",
-                          marginBottom: 8,
+                          marginBottom: 12,
                         }}
                       >
-                        {item.label}
+                        Net income · {periodLabel}
                       </div>
                       <div
                         style={{
-                          fontSize: 17,
+                          fontSize: 36,
                           fontWeight: 700,
                           color: "var(--brand-text)",
+                          marginBottom: 6,
+                          lineHeight: 1.1,
                         }}
                       >
-                        ₱{item.value.toLocaleString("en-PH")}
+                        {formatCurrency(periodStats.netIncome)}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 13,
+                          color: "var(--brand-text-muted)",
+                        }}
+                      >
+                        Income minus expenses for this{" "}
+                        {overviewMode === "week" ? "week" : "month"}
                       </div>
                     </div>
-                  ))}
-                </div>
-              </div>
+                    <div style={{ display: "flex", gap: 32, flexWrap: "wrap" }}>
+                      {[
+                        {
+                          label: "Collected",
+                          value: periodStats.collectedRevenue,
+                        },
+                        {
+                          label: "Expected",
+                          value: periodStats.expectedRevenue,
+                        },
+                        { label: "Expenses", value: periodStats.totalExpenses },
+                      ].map((item) => (
+                        <div key={item.label} style={{ textAlign: "right" }}>
+                          <div
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 600,
+                              color: "var(--brand-text-muted)",
+                              textTransform: "uppercase",
+                              letterSpacing: "0.06em",
+                              marginBottom: 8,
+                            }}
+                          >
+                            {item.label}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 17,
+                              fontWeight: 700,
+                              color: "var(--brand-text)",
+                            }}
+                          >
+                            ₱{item.value.toLocaleString("en-PH")}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
 
-              {/* Collection progress */}
-              <div
-                style={{
-                  background: "var(--brand-surface)",
-                  border: "1px solid var(--brand-border)",
-                  borderRadius: 16,
-                  padding: "22px 28px",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    marginBottom: 14,
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: 14,
-                      fontWeight: 600,
-                      color: "var(--brand-text)",
-                    }}
-                  >
-                    Collection progress
-                  </span>
-                  <span
-                    style={{
-                      fontSize: 13,
-                      fontWeight: 700,
-                      color: "var(--brand-text)",
-                    }}
-                  >
-                    {collectionPct}% collected
-                  </span>
-                </div>
-                <div
-                  style={{
-                    height: 8,
-                    borderRadius: 8,
-                    background: "var(--brand-border)",
-                    overflow: "hidden",
-                  }}
-                >
+                  {/* Collection progress */}
                   <div
-                    style={{
-                      height: "100%",
-                      width: `${collectionPct}%`,
-                      background: "#a3e635",
-                      borderRadius: 8,
-                      transition: "width 0.3s",
-                    }}
-                  />
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    marginTop: 10,
-                    fontSize: 12,
-                    color: "var(--brand-text-muted)",
-                  }}
-                >
-                  <span>
-                    ₱
-                    {pendingCollection.toLocaleString("en-PH", {
-                      minimumFractionDigits: 2,
-                    })}{" "}
-                    pending
-                  </span>
-                  <span>
-                    ₱
-                    {expectedRevenue.toLocaleString("en-PH", {
-                      minimumFractionDigits: 2,
-                    })}{" "}
-                    expected total
-                  </span>
-                </div>
-              </div>
-
-              {/* Quick stats */}
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-                  gap: 16,
-                }}
-              >
-                {[
-                  {
-                    icon: "📋",
-                    value: String(activeBookings),
-                    label: "Active bookings",
-                  },
-                  {
-                    icon: "👥",
-                    value: String(
-                      employees.filter((e) => e.status !== "revoked").length
-                    ),
-                    label: "Team size",
-                  },
-                  {
-                    icon: "📅",
-                    value: String(bookingsThisMonth),
-                    label: "Bookings this month",
-                  },
-                ].map((s) => (
-                  <div
-                    key={s.label}
                     style={{
                       background: "var(--brand-surface)",
                       border: "1px solid var(--brand-border)",
                       borderRadius: 16,
-                      padding: "18px 20px",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 14,
+                      padding: "22px 28px",
                     }}
                   >
-                    <div style={{ fontSize: 20 }}>{s.icon}</div>
-                    <div>
-                      <div
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        marginBottom: 14,
+                      }}
+                    >
+                      <span
                         style={{
-                          fontSize: 22,
+                          fontSize: 14,
+                          fontWeight: 600,
+                          color: "var(--brand-text)",
+                        }}
+                      >
+                        Collection progress
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 13,
                           fontWeight: 700,
                           color: "var(--brand-text)",
-                          lineHeight: 1.1,
                         }}
                       >
-                        {s.value}
-                      </div>
+                        {periodStats.collectionPct}% collected
+                      </span>
+                    </div>
+                    <div
+                      style={{
+                        height: 8,
+                        borderRadius: 8,
+                        background: "var(--brand-border)",
+                        overflow: "hidden",
+                      }}
+                    >
                       <div
                         style={{
-                          fontSize: 12,
-                          color: "var(--brand-text-muted)",
+                          height: "100%",
+                          width: `${periodStats.collectionPct}%`,
+                          background: "#a3e635",
+                          borderRadius: 8,
+                          transition: "width 0.3s",
                         }}
-                      >
-                        {s.label}
-                      </div>
+                      />
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        marginTop: 10,
+                        fontSize: 12,
+                        color: "var(--brand-text-muted)",
+                      }}
+                    >
+                      <span>
+                        {formatCurrency(periodStats.pendingCollection)} pending
+                      </span>
+                      <span>
+                        {formatCurrency(periodStats.expectedRevenue)} expected
+                        total
+                      </span>
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
+
+                  {/* Quick stats */}
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns:
+                        "repeat(auto-fit, minmax(160px, 1fr))",
+                      gap: 16,
+                    }}
+                  >
+                    {[
+                      {
+                        icon: "📋",
+                        value: String(activeBookings),
+                        label: "Active bookings (now)",
+                      },
+                      {
+                        icon: "👥",
+                        value: String(activeTeamSize),
+                        label: "Team size",
+                      },
+                      {
+                        icon: "📅",
+                        value: String(periodStats.bookingsCount),
+                        label: `Bookings this ${
+                          overviewMode === "week" ? "week" : "month"
+                        }`,
+                      },
+                    ].map((s) => (
+                      <div
+                        key={s.label}
+                        style={{
+                          background: "var(--brand-surface)",
+                          border: "1px solid var(--brand-border)",
+                          borderRadius: 16,
+                          padding: "18px 20px",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 14,
+                        }}
+                      >
+                        <div style={{ fontSize: 20 }}>{s.icon}</div>
+                        <div>
+                          <div
+                            style={{
+                              fontSize: 22,
+                              fontWeight: 700,
+                              color: "var(--brand-text)",
+                              lineHeight: 1.1,
+                            }}
+                          >
+                            {s.value}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 12,
+                              color: "var(--brand-text-muted)",
+                            }}
+                          >
+                            {s.label}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Commission leaderboard */}
+                <div
+                  style={{
+                    background: "var(--brand-surface)",
+                    borderRadius: 16,
+                    boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+                    border: "1px solid var(--brand-border)",
+                    padding: "22px 24px",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      marginBottom: 18,
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: 14,
+                        fontWeight: 700,
+                        color: "var(--brand-text)",
+                      }}
+                    >
+                      🏆 Commission leaderboard
+                    </div>
+                    <span
+                      style={{ fontSize: 11, color: "var(--brand-text-muted)" }}
+                    >
+                      ₱{COMMISSION_PER_BOOKING} per booking handled
+                    </span>
+                  </div>
+
+                  {!hasAttributedBookings && (
+                    <p
+                      style={{
+                        fontSize: 12,
+                        color: "var(--brand-text-muted)",
+                        marginBottom: 12,
+                      }}
+                    >
+                      No bookings are attributed to an employee yet, so
+                      commissions can&apos;t be calculated. Make sure bookings
+                      store which employee handled them.
+                    </p>
+                  )}
+
+                  {leaderboard.length === 0 ? (
+                    <p
+                      style={{ fontSize: 13, color: "var(--brand-text-muted)" }}
+                    >
+                      No active employees yet.
+                    </p>
+                  ) : (
+                    leaderboard.map((entry, i) => (
+                      <div
+                        key={entry.person.id}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          padding: "12px 0",
+                          borderBottom:
+                            i === leaderboard.length - 1
+                              ? "none"
+                              : "1px solid var(--background)",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 12,
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: 28,
+                              textAlign: "center",
+                              fontSize: 15,
+                              fontWeight: 700,
+                              color: "var(--brand-text-muted)",
+                            }}
+                          >
+                            {i === 0
+                              ? "🥇"
+                              : i === 1
+                              ? "🥈"
+                              : i === 2
+                              ? "🥉"
+                              : `#${i + 1}`}
+                          </div>
+                          <div
+                            style={{
+                              width: 36,
+                              height: 36,
+                              borderRadius: 10,
+                              background:
+                                "linear-gradient(135deg, #1a2744, #2cb5b0)",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              color: "white",
+                              fontWeight: 700,
+                              fontSize: 14,
+                              flexShrink: 0,
+                            }}
+                          >
+                            {entry.person.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <div
+                              style={{
+                                fontSize: 13,
+                                fontWeight: 600,
+                                color: "var(--brand-text)",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 6,
+                              }}
+                            >
+                              {entry.person.name}
+                              <span
+                                style={{
+                                  padding: "1px 8px",
+                                  borderRadius: 20,
+                                  fontSize: 10,
+                                  fontWeight: 600,
+                                  background:
+                                    ROLE_COLORS[entry.person.role]?.bg,
+                                  color: ROLE_COLORS[entry.person.role]?.color,
+                                }}
+                              >
+                                {entry.person.role}
+                              </span>
+                            </div>
+                            <div
+                              style={{
+                                fontSize: 11,
+                                color: "var(--brand-text-muted)",
+                              }}
+                            >
+                              {entry.bookingsCount} booking
+                              {entry.bookingsCount === 1 ? "" : "s"} ·{" "}
+                              {formatCurrency(entry.revenueGenerated)} collected
+                            </div>
+                          </div>
+                        </div>
+                        <div
+                          style={{
+                            fontSize: 15,
+                            fontWeight: 700,
+                            color: "var(--brand-text)",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {formatCurrency(entry.commission)}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </>
+            )}
 
             {/* Tabs */}
             <div
@@ -852,6 +1323,7 @@ export default function OwnerPage() {
                 display: "flex",
                 gap: 8,
                 marginBottom: 24,
+                marginTop: activeTab === "Overview" ? 24 : 0,
                 flexWrap: "wrap",
               }}
             >
@@ -1068,376 +1540,6 @@ export default function OwnerPage() {
                     ))}
                   </div>
                 )}
-              </div>
-            )}
-
-            {/* ── Overview ── */}
-            {activeTab === "Overview" && (
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: 16,
-                }}
-              >
-                {/* Recent bookings */}
-                <div
-                  style={{
-                    background: "var(--brand-surface)",
-                    borderRadius: 16,
-                    boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
-                    border: "1px solid var(--brand-border)",
-                    padding: "20px 24px",
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: 13,
-                      fontWeight: 700,
-                      color: "var(--brand-text)",
-                      marginBottom: 16,
-                    }}
-                  >
-                    Recent bookings
-                  </div>
-                  {bookings.slice(0, 6).map((b) => (
-                    <div
-                      key={b.id}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        padding: "10px 0",
-                        borderBottom: "1px solid var(--background)",
-                      }}
-                    >
-                      <div>
-                        <div
-                          style={{
-                            fontSize: 13,
-                            fontWeight: 600,
-                            color: "var(--brand-text)",
-                          }}
-                        >
-                          {b.guestName}
-                        </div>
-                        <div
-                          style={{
-                            fontSize: 11,
-                            color: "var(--brand-text-muted)",
-                          }}
-                        >
-                          {b.Property?.name} · {formatDate(b.checkIn)}
-                        </div>
-                      </div>
-                      <span
-                        style={{
-                          padding: "2px 10px",
-                          borderRadius: 20,
-                          fontSize: 11,
-                          fontWeight: 600,
-                          background: STATUS_COLORS[b.status]?.bg,
-                          color: STATUS_COLORS[b.status]?.color,
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {b.status.replace("_", " ")}
-                      </span>
-                    </div>
-                  ))}
-                  {bookings.length === 0 && (
-                    <p
-                      style={{ fontSize: 13, color: "var(--brand-text-muted)" }}
-                    >
-                      No bookings yet.
-                    </p>
-                  )}
-                </div>
-
-                {/* Recent expenses */}
-                <div
-                  style={{
-                    background: "var(--brand-surface)",
-                    borderRadius: 16,
-                    boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
-                    border: "1px solid var(--brand-border)",
-                    padding: "20px 24px",
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: 13,
-                      fontWeight: 700,
-                      color: "var(--brand-text)",
-                      marginBottom: 16,
-                    }}
-                  >
-                    Recent expenses
-                  </div>
-                  {expenseNotes.slice(0, 6).map((n) => (
-                    <div
-                      key={n.id}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        padding: "10px 0",
-                        borderBottom: "1px solid var(--background)",
-                      }}
-                    >
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <span
-                          style={{
-                            fontSize: 11,
-                            fontWeight: 600,
-                            padding: "2px 8px",
-                            borderRadius: 20,
-                            background: CATEGORY_COLORS[n.category]?.bg,
-                            color: CATEGORY_COLORS[n.category]?.color,
-                            marginRight: 8,
-                          }}
-                        >
-                          {n.category}
-                        </span>
-                        <span
-                          style={{ fontSize: 13, color: "var(--brand-text)" }}
-                        >
-                          {n.content.slice(0, 35)}
-                          {n.content.length > 35 ? "…" : ""}
-                        </span>
-                      </div>
-                      <span
-                        style={{
-                          fontSize: 13,
-                          fontWeight: 600,
-                          color: "var(--brand-text)",
-                          whiteSpace: "nowrap",
-                          marginLeft: 12,
-                        }}
-                      >
-                        ₱
-                        {Number(n.amount).toLocaleString("en-PH", {
-                          minimumFractionDigits: 2,
-                        })}
-                      </span>
-                    </div>
-                  ))}
-                  {expenseNotes.length === 0 && (
-                    <p
-                      style={{ fontSize: 13, color: "var(--brand-text-muted)" }}
-                    >
-                      No expenses yet.
-                    </p>
-                  )}
-                </div>
-
-                {/* Recent payments */}
-                <div
-                  style={{
-                    background: "var(--brand-surface)",
-                    borderRadius: 16,
-                    boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
-                    border: "1px solid var(--brand-border)",
-                    padding: "20px 24px",
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: 13,
-                      fontWeight: 700,
-                      color: "var(--brand-text)",
-                      marginBottom: 16,
-                    }}
-                  >
-                    Recent payments
-                  </div>
-                  {payments.slice(0, 6).map((p) => (
-                    <div
-                      key={p.id}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        padding: "10px 0",
-                        borderBottom: "1px solid var(--background)",
-                      }}
-                    >
-                      <div>
-                        <div
-                          style={{
-                            fontSize: 13,
-                            fontWeight: 600,
-                            color: "var(--brand-text)",
-                          }}
-                        >
-                          {p.Booking?.guestName || "—"}
-                        </div>
-                        <div
-                          style={{
-                            fontSize: 11,
-                            color: "var(--brand-text-muted)",
-                          }}
-                        >
-                          {p.type} ·{" "}
-                          {p.paidAt ? formatDate(p.paidAt) : "Unpaid"}
-                        </div>
-                      </div>
-                      <div style={{ textAlign: "right" }}>
-                        <div
-                          style={{
-                            fontSize: 13,
-                            fontWeight: 600,
-                            color: "var(--brand-text)",
-                          }}
-                        >
-                          ₱
-                          {Number(p.amount).toLocaleString("en-PH", {
-                            minimumFractionDigits: 2,
-                          })}
-                        </div>
-                        <span
-                          style={{
-                            fontSize: 11,
-                            fontWeight: 600,
-                            padding: "1px 8px",
-                            borderRadius: 20,
-                            background: STATUS_COLORS[p.status]?.bg,
-                            color: STATUS_COLORS[p.status]?.color,
-                          }}
-                        >
-                          {p.status}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                  {payments.length === 0 && (
-                    <p
-                      style={{ fontSize: 13, color: "var(--brand-text-muted)" }}
-                    >
-                      No payments yet.
-                    </p>
-                  )}
-                </div>
-
-                {/* Team */}
-                <div
-                  style={{
-                    background: "var(--brand-surface)",
-                    borderRadius: 16,
-                    boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
-                    border: "1px solid var(--brand-border)",
-                    padding: "20px 24px",
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: 13,
-                      fontWeight: 700,
-                      color: "var(--brand-text)",
-                      marginBottom: 16,
-                    }}
-                  >
-                    Team
-                  </div>
-                  {employees.length === 0 ? (
-                    <p
-                      style={{ fontSize: 13, color: "var(--brand-text-muted)" }}
-                    >
-                      No employees yet. Go to the Employees tab to invite
-                      someone.
-                    </p>
-                  ) : (
-                    employees.slice(0, 6).map((e) => (
-                      <div
-                        key={e.id}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          padding: "10px 0",
-                          borderBottom: "1px solid var(--background)",
-                        }}
-                      >
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 10,
-                          }}
-                        >
-                          <div
-                            style={{
-                              width: 32,
-                              height: 32,
-                              borderRadius: 8,
-                              background:
-                                "linear-gradient(135deg, #1a2744, #2cb5b0)",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              color: "white",
-                              fontWeight: 700,
-                              fontSize: 13,
-                            }}
-                          >
-                            {e.name.charAt(0).toUpperCase()}
-                          </div>
-                          <div>
-                            <div
-                              style={{
-                                fontSize: 13,
-                                fontWeight: 600,
-                                color: "var(--brand-text)",
-                              }}
-                            >
-                              {e.name}
-                            </div>
-                            <div
-                              style={{
-                                fontSize: 11,
-                                color: "var(--brand-text-muted)",
-                              }}
-                            >
-                              {e.email}
-                            </div>
-                          </div>
-                        </div>
-                        <div
-                          style={{
-                            display: "flex",
-                            gap: 6,
-                            alignItems: "center",
-                          }}
-                        >
-                          <span
-                            style={{
-                              padding: "2px 8px",
-                              borderRadius: 20,
-                              fontSize: 11,
-                              fontWeight: 600,
-                              background: ROLE_COLORS[e.role]?.bg,
-                              color: ROLE_COLORS[e.role]?.color,
-                            }}
-                          >
-                            {e.role}
-                          </span>
-                          <span
-                            style={{
-                              padding: "2px 8px",
-                              borderRadius: 20,
-                              fontSize: 11,
-                              fontWeight: 600,
-                              background: STATUS_COLORS[e.status]?.bg,
-                              color: STATUS_COLORS[e.status]?.color,
-                            }}
-                          >
-                            {e.status}
-                          </span>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
               </div>
             )}
 
@@ -1710,10 +1812,7 @@ export default function OwnerPage() {
                               color: "var(--brand-text)",
                             }}
                           >
-                            ₱
-                            {Number(note.amount).toLocaleString("en-PH", {
-                              minimumFractionDigits: 2,
-                            })}
+                            {formatCurrency(Number(note.amount))}
                           </span>
                         )}
                       </div>
@@ -1769,102 +1868,143 @@ export default function OwnerPage() {
                     </p>
                   </div>
                 ) : (
-                  payments.map((p) => (
-                    <div
-                      key={p.id}
-                      style={{
-                        background: "var(--brand-surface)",
-                        borderRadius: 16,
-                        boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
-                        border: "1px solid var(--brand-border)",
-                        padding: "20px 24px",
-                        borderLeft: `4px solid ${
-                          STATUS_COLORS[p.status]?.bg || "var(--brand-border)"
-                        }`,
-                      }}
-                    >
+                  <>
+                    {paginatedPayments.map((p) => (
                       <div
+                        key={p.id}
                         style={{
-                          display: "flex",
-                          alignItems: "flex-start",
-                          justifyContent: "space-between",
-                          flexWrap: "wrap",
-                          gap: 12,
+                          background: "var(--brand-surface)",
+                          borderRadius: 16,
+                          boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+                          border: "1px solid var(--brand-border)",
+                          padding: "20px 24px",
+                          borderLeft: `4px solid ${
+                            STATUS_COLORS[p.status]?.bg || "var(--brand-border)"
+                          }`,
                         }}
                       >
-                        <div>
-                          <div
-                            style={{
-                              fontWeight: 700,
-                              color: "var(--brand-text)",
-                              fontSize: 15,
-                              marginBottom: 4,
-                            }}
-                          >
-                            {p.Booking?.guestName || "—"}
-                          </div>
-                          <div
-                            style={{
-                              fontSize: 12,
-                              color: "var(--brand-text-muted)",
-                              marginBottom: 4,
-                            }}
-                          >
-                            {p.Booking?.Property?.name || "—"} · {p.type}
-                          </div>
-                          {p.notes && (
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "flex-start",
+                            justifyContent: "space-between",
+                            flexWrap: "wrap",
+                            gap: 12,
+                          }}
+                        >
+                          <div>
                             <div
                               style={{
-                                fontSize: 13,
-                                color: "var(--brand-text-muted)",
-                                fontStyle: "italic",
+                                fontWeight: 700,
+                                color: "var(--brand-text)",
+                                fontSize: 15,
+                                marginBottom: 4,
                               }}
                             >
-                              {p.notes}
+                              {p.Booking?.guestName || "—"}
                             </div>
-                          )}
-                        </div>
-                        <div style={{ textAlign: "right" }}>
-                          <div
-                            style={{
-                              fontSize: 20,
-                              fontWeight: 700,
-                              color: "var(--brand-text)",
-                              marginBottom: 6,
-                            }}
-                          >
-                            ₱
-                            {Number(p.amount).toLocaleString("en-PH", {
-                              minimumFractionDigits: 2,
-                            })}
-                          </div>
-                          <span
-                            style={{
-                              padding: "3px 10px",
-                              borderRadius: 20,
-                              fontSize: 12,
-                              fontWeight: 600,
-                              background: STATUS_COLORS[p.status]?.bg,
-                              color: STATUS_COLORS[p.status]?.color,
-                            }}
-                          >
-                            {p.status}
-                          </span>
-                          {p.paidAt && (
                             <div
                               style={{
-                                fontSize: 11,
+                                fontSize: 12,
                                 color: "var(--brand-text-muted)",
-                                marginTop: 6,
+                                marginBottom: 4,
                               }}
                             >
-                              Paid {formatDate(p.paidAt)}
+                              {p.Booking?.Property?.name || "—"} · {p.type}
                             </div>
-                          )}
+                            {p.notes && (
+                              <div
+                                style={{
+                                  fontSize: 13,
+                                  color: "var(--brand-text-muted)",
+                                  fontStyle: "italic",
+                                }}
+                              >
+                                {p.notes}
+                              </div>
+                            )}
+                          </div>
+                          <div style={{ textAlign: "right" }}>
+                            <div
+                              style={{
+                                fontSize: 20,
+                                fontWeight: 700,
+                                color: "var(--brand-text)",
+                                marginBottom: 6,
+                              }}
+                            >
+                              {formatCurrency(Number(p.amount))}
+                            </div>
+                            <span
+                              style={{
+                                padding: "3px 10px",
+                                borderRadius: 20,
+                                fontSize: 12,
+                                fontWeight: 600,
+                                background: STATUS_COLORS[p.status]?.bg,
+                                color: STATUS_COLORS[p.status]?.color,
+                              }}
+                            >
+                              {p.status}
+                            </span>
+                            {p.paidAt && (
+                              <div
+                                style={{
+                                  fontSize: 11,
+                                  color: "var(--brand-text-muted)",
+                                  marginTop: 6,
+                                }}
+                              >
+                                Paid {formatDate(p.paidAt)}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
+                    ))}
+
+                    {/* Pagination */}
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 12,
+                        marginTop: 8,
+                      }}
+                    >
+                      <button
+                        onClick={() =>
+                          setPaymentsPage((p) => Math.max(1, p - 1))
+                        }
+                        disabled={paymentsPage === 1}
+                        style={paginationBtnStyle(paymentsPage === 1)}
+                      >
+                        ‹ Prev
+                      </button>
+                      <span
+                        style={{
+                          fontSize: 13,
+                          color: "var(--brand-text-muted)",
+                        }}
+                      >
+                        Page {paymentsPage} of {totalPaymentsPages}
+                      </span>
+                      <button
+                        onClick={() =>
+                          setPaymentsPage((p) =>
+                            Math.min(totalPaymentsPages, p + 1)
+                          )
+                        }
+                        disabled={paymentsPage === totalPaymentsPages}
+                        style={paginationBtnStyle(
+                          paymentsPage === totalPaymentsPages
+                        )}
+                      >
+                        Next ›
+                      </button>
                     </div>
-                  ))
+                  </>
                 )}
               </div>
             )}
@@ -2057,129 +2197,228 @@ export default function OwnerPage() {
                     No bookings found.
                   </div>
                 ) : (
-                  filteredBookings.map((b) => (
-                    <div
-                      key={b.id}
-                      style={{
-                        background: "var(--brand-surface)",
-                        borderRadius: 16,
-                        boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
-                        border: "1px solid var(--brand-border)",
-                        padding: "20px 24px",
-                        borderLeft: `4px solid ${
-                          STATUS_COLORS[b.status]?.bg || "var(--brand-border)"
-                        }`,
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          flexWrap: "wrap",
-                          gap: 12,
-                        }}
-                      >
+                  <>
+                    {paginatedBookings.map((b) => {
+                      const { downPayment, totalCost, balance } =
+                        getBookingPaymentBreakdown(b);
+                      return (
                         <div
+                          key={b.id}
                           style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 12,
+                            background: "var(--brand-surface)",
+                            borderRadius: 16,
+                            boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+                            border: "1px solid var(--brand-border)",
+                            padding: "20px 24px",
+                            borderLeft: `4px solid ${
+                              STATUS_COLORS[b.status]?.bg ||
+                              "var(--brand-border)"
+                            }`,
                           }}
                         >
                           <div
                             style={{
-                              width: 40,
-                              height: 40,
-                              borderRadius: 10,
-                              background:
-                                "linear-gradient(135deg, #1a2744, #2cb5b0)",
                               display: "flex",
                               alignItems: "center",
-                              justifyContent: "center",
-                              color: "white",
-                              fontWeight: 700,
-                              fontSize: 16,
-                              flexShrink: 0,
+                              justifyContent: "space-between",
+                              flexWrap: "wrap",
+                              gap: 12,
+                              marginBottom: 16,
                             }}
                           >
-                            {b.guestName.charAt(0).toUpperCase()}
-                          </div>
-                          <div>
                             <div
                               style={{
-                                fontWeight: 700,
-                                color: "var(--brand-text)",
-                                fontSize: 15,
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 12,
                               }}
                             >
-                              {b.guestName}
-                            </div>
-                            <div
-                              style={{
-                                fontSize: 12,
-                                color: "var(--brand-text-muted)",
-                              }}
-                            >
-                              🏠 {b.Property?.name || "—"} · {b.source}
-                            </div>
-                          </div>
-                        </div>
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 20,
-                            flexWrap: "wrap",
-                          }}
-                        >
-                          {[
-                            { label: "Check-in", val: formatDate(b.checkIn) },
-                            { label: "Check-out", val: formatDate(b.checkOut) },
-                            {
-                              label: "Nights",
-                              val: String(nights(b.checkIn, b.checkOut)),
-                            },
-                          ].map((item) => (
-                            <div key={item.label}>
                               <div
                                 style={{
-                                  fontSize: 11,
-                                  color: "var(--brand-text-muted)",
-                                  textTransform: "uppercase",
-                                  letterSpacing: "0.06em",
-                                  marginBottom: 2,
+                                  width: 40,
+                                  height: 40,
+                                  borderRadius: 10,
+                                  background:
+                                    "linear-gradient(135deg, #1a2744, #2cb5b0)",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  color: "white",
+                                  fontWeight: 700,
+                                  fontSize: 16,
+                                  flexShrink: 0,
                                 }}
                               >
-                                {item.label}
+                                {b.guestName.charAt(0).toUpperCase()}
                               </div>
-                              <div
+                              <div>
+                                <div
+                                  style={{
+                                    fontWeight: 700,
+                                    color: "var(--brand-text)",
+                                    fontSize: 15,
+                                  }}
+                                >
+                                  {b.guestName}
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: 12,
+                                    color: "var(--brand-text-muted)",
+                                  }}
+                                >
+                                  🏠 {b.Property?.name || "—"} · {b.source}
+                                </div>
+                              </div>
+                            </div>
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 20,
+                                flexWrap: "wrap",
+                              }}
+                            >
+                              {[
+                                {
+                                  label: "Check-in",
+                                  val: formatDate(b.checkIn),
+                                },
+                                {
+                                  label: "Check-out",
+                                  val: formatDate(b.checkOut),
+                                },
+                                {
+                                  label: "Nights",
+                                  val: String(nights(b.checkIn, b.checkOut)),
+                                },
+                              ].map((item) => (
+                                <div key={item.label}>
+                                  <div
+                                    style={{
+                                      fontSize: 11,
+                                      color: "var(--brand-text-muted)",
+                                      textTransform: "uppercase",
+                                      letterSpacing: "0.06em",
+                                      marginBottom: 2,
+                                    }}
+                                  >
+                                    {item.label}
+                                  </div>
+                                  <div
+                                    style={{
+                                      fontSize: 13,
+                                      fontWeight: 600,
+                                      color: "var(--brand-text)",
+                                    }}
+                                  >
+                                    {item.val}
+                                  </div>
+                                </div>
+                              ))}
+                              <span
                                 style={{
-                                  fontSize: 13,
+                                  padding: "4px 12px",
+                                  borderRadius: 20,
+                                  fontSize: 12,
                                   fontWeight: 600,
-                                  color: "var(--brand-text)",
+                                  background: STATUS_COLORS[b.status]?.bg,
+                                  color: STATUS_COLORS[b.status]?.color,
                                 }}
                               >
-                                {item.val}
-                              </div>
+                                {b.status.replace("_", " ")}
+                              </span>
                             </div>
-                          ))}
-                          <span
+                          </div>
+
+                          {/* Payment breakdown */}
+                          <div
                             style={{
-                              padding: "4px 12px",
-                              borderRadius: 20,
-                              fontSize: 12,
-                              fontWeight: 600,
-                              background: STATUS_COLORS[b.status]?.bg,
-                              color: STATUS_COLORS[b.status]?.color,
+                              display: "flex",
+                              gap: 20,
+                              flexWrap: "wrap",
+                              paddingTop: 14,
+                              borderTop: "1px solid var(--background)",
                             }}
                           >
-                            {b.status.replace("_", " ")}
-                          </span>
+                            {[
+                              { label: "Total cost", val: totalCost },
+                              { label: "Down payment", val: downPayment },
+                              { label: "Balance", val: balance },
+                            ].map((item) => (
+                              <div key={item.label}>
+                                <div
+                                  style={{
+                                    fontSize: 11,
+                                    color: "var(--brand-text-muted)",
+                                    textTransform: "uppercase",
+                                    letterSpacing: "0.06em",
+                                    marginBottom: 2,
+                                  }}
+                                >
+                                  {item.label}
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: 14,
+                                    fontWeight: 700,
+                                    color:
+                                      item.label === "Balance" && item.val > 0
+                                        ? "#e74c3c"
+                                        : "var(--brand-text)",
+                                  }}
+                                >
+                                  {formatCurrency(item.val)}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                      </div>
+                      );
+                    })}
+
+                    {/* Pagination */}
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 12,
+                        marginTop: 8,
+                      }}
+                    >
+                      <button
+                        onClick={() =>
+                          setBookingsPage((p) => Math.max(1, p - 1))
+                        }
+                        disabled={bookingsPage === 1}
+                        style={paginationBtnStyle(bookingsPage === 1)}
+                      >
+                        ‹ Prev
+                      </button>
+                      <span
+                        style={{
+                          fontSize: 13,
+                          color: "var(--brand-text-muted)",
+                        }}
+                      >
+                        Page {bookingsPage} of {totalBookingsPages}
+                      </span>
+                      <button
+                        onClick={() =>
+                          setBookingsPage((p) =>
+                            Math.min(totalBookingsPages, p + 1)
+                          )
+                        }
+                        disabled={bookingsPage === totalBookingsPages}
+                        style={paginationBtnStyle(
+                          bookingsPage === totalBookingsPages
+                        )}
+                      >
+                        Next ›
+                      </button>
                     </div>
-                  ))
+                  </>
                 )}
               </div>
             )}
