@@ -57,7 +57,17 @@ function buildDateRange(checkinStr: string, checkoutStr: string): string[] {
 function parseStructuredDate(input: string): Date | null {
   const results = chrono.parse(input, new Date(), { forwardDate: true });
   if (!results || results.length === 0) return null;
-  return results[0].date();
+  const parsed = results[0].date();
+
+  // ManyChat serializes unset Date/DateTime fields as epoch (Jan 1 1970)
+  // in the contact's local timezone rather than leaving the merge tag blank.
+  // Treat anything within a day of epoch as "no real date provided."
+  const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+  if (Math.abs(parsed.getTime()) < ONE_DAY_MS) {
+    return null;
+  }
+
+  return parsed;
 }
 
 // ---------- booking overlap helpers ----------
