@@ -258,7 +258,7 @@ export async function POST(req: NextRequest) {
       results.push({ unit: property.name, status, openTypes, perDate });
     }
 
-    const isMultiNight = requestedDates.length > 1;
+    const isMultiNight = checkinStr !== checkoutStr;
     const fullyAvailableUnits = results.filter((r) => r.status === "Available");
     const partialUnits = results.filter((r) => r.status === "Partial");
 
