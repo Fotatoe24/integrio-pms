@@ -56,6 +56,7 @@ const SOURCE_ICONS: Record<string, string> = {
   DIRECT: "🔗",
   AIRBNB: "🏠",
   MANUAL: "✏️",
+  BOT: "🤖",
 };
 
 const PLATFORMS = ["Facebook", "TikTok", "Airbnb", "Direct", "Walk-in"];
@@ -109,6 +110,7 @@ export default function BookingsPage() {
   const [conflictWarning, setConflictWarning] = useState("");
   const [nightCleaning, setNightCleaning] = useState(false);
   const [alternateUnits, setAlternateUnits] = useState<Property[]>([]);
+  const [filterSource, setFilterSource] = useState("ALL");
 
   const [form, setForm] = useState({
     propertyId: "",
@@ -159,7 +161,7 @@ export default function BookingsPage() {
       supabase
         .from("Booking")
         .select(
-          "*, Property(name), Payment(id, type, amount, status, paidAt, method, receivedBy)",
+          "*, Property(name), Payment(id, type, amount, status, paidAt, method, receivedBy)"
         )
         .order("checkIn", { ascending: false }),
       supabase.from("Property").select("id, name"),
@@ -209,7 +211,7 @@ export default function BookingsPage() {
     const end = new Date(checkOut);
     const nightsCount = Math.max(
       1,
-      Math.round((end.getTime() - start.getTime()) / 86400000),
+      Math.round((end.getTime() - start.getTime()) / 86400000)
     );
 
     // Sum the per-night rate for each night in the stay, respecting weekday/weekend pricing
@@ -237,7 +239,7 @@ export default function BookingsPage() {
       const rateFields = applyStayType(
         updated.stayType,
         updated.checkIn,
-        updated.checkOut,
+        updated.checkOut
       );
       Object.assign(updated, rateFields);
     }
@@ -253,7 +255,7 @@ export default function BookingsPage() {
         updated.stayType,
         updated.checkInTime,
         updated.checkOutTime,
-        editingId ?? undefined,
+        editingId ?? undefined
       );
       setConflictWarning(warning);
 
@@ -263,7 +265,7 @@ export default function BookingsPage() {
         updated.stayType,
         updated.checkInTime,
         updated.checkOutTime,
-        editingId ?? undefined,
+        editingId ?? undefined
       ).filter((p) => p.id !== updated.propertyId);
       setAlternateUnits(others);
     }
@@ -276,7 +278,7 @@ export default function BookingsPage() {
     newStayType: string,
     newCheckInTime: string,
     newCheckOutTime: string,
-    excludeId?: string,
+    excludeId?: string
   ) {
     if (!propertyId || !checkIn || !checkOut) return "";
     const newIn = parseDateTime(checkIn, newCheckInTime);
@@ -295,13 +297,13 @@ export default function BookingsPage() {
     if (overlapping.length === 0) return "";
 
     const existingHasLong = overlapping.some((b) =>
-      (b.stayType || "").includes("Long"),
+      (b.stayType || "").includes("Long")
     );
 
     if (newIsLong || existingHasLong) {
       const conflict = overlapping[0];
       return `⚠️ Conflicts with ${conflict.guestName} (${new Date(
-        conflict.checkIn,
+        conflict.checkIn
       ).toLocaleDateString("en-PH", {
         month: "short",
         day: "numeric",
@@ -325,7 +327,7 @@ export default function BookingsPage() {
     newStayType: string,
     newCheckInTime: string,
     newCheckOutTime: string,
-    excludeId?: string,
+    excludeId?: string
   ) {
     if (!propertyId || !checkIn || !checkOut) return "";
     const newIn = parseDateTime(checkIn, newCheckInTime);
@@ -344,7 +346,7 @@ export default function BookingsPage() {
     if (overlapping.length === 0) return "";
 
     const existingHasLong = overlapping.some((b) =>
-      (b.stayType || "").includes("Long"),
+      (b.stayType || "").includes("Long")
     );
 
     if (newIsLong || existingHasLong) {
@@ -373,7 +375,7 @@ export default function BookingsPage() {
     stayType: string,
     checkInTime: string,
     checkOutTime: string,
-    excludeId?: string,
+    excludeId?: string
   ) {
     if (!checkIn || !checkOut) return [];
     return properties.filter(
@@ -385,8 +387,8 @@ export default function BookingsPage() {
           stayType,
           checkInTime,
           checkOutTime,
-          excludeId,
-        ) === "",
+          excludeId
+        ) === ""
     );
   }
 
@@ -491,7 +493,7 @@ export default function BookingsPage() {
       form.stayType,
       form.checkInTime,
       form.checkOutTime,
-      editingId ?? undefined,
+      editingId ?? undefined
     );
     if (conflict && form.status !== "CANCELLED") {
       setError(conflict);
@@ -643,7 +645,7 @@ export default function BookingsPage() {
 
   function nights(checkIn: string, checkOut: string) {
     return Math.round(
-      (new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 86400000,
+      (new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 86400000
     );
   }
 
@@ -662,15 +664,16 @@ export default function BookingsPage() {
       (b) =>
         b.propertyId === form.propertyId &&
         b.status !== "CANCELLED" &&
-        b.id !== editingId,
+        b.id !== editingId
     )
     .filter((b) => new Date(b.checkOut) >= new Date())
     .sort(
-      (a, b) => new Date(a.checkIn).getTime() - new Date(b.checkIn).getTime(),
+      (a, b) => new Date(a.checkIn).getTime() - new Date(b.checkIn).getTime()
     )
     .slice(0, 5);
 
   const filtered = bookings.filter((b) => {
+    if (filterSource !== "ALL" && b.source !== filterSource) return false;
     if (filterStatus !== "ALL" && b.status !== filterStatus) return false;
     if (filterProperty !== "ALL" && b.propertyId !== filterProperty)
       return false;
@@ -813,6 +816,43 @@ export default function BookingsPage() {
         </div>
       </div>
 
+      {/* 👇 PASTE THE BADGE HERE 👇 */}
+
+      {bookings.some((b) => b.source === "BOT" && b.status === "PENDING") && (
+        <button
+          onClick={() => {
+            setFilterSource("BOT");
+            setFilterStatus("PENDING");
+          }}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "9px 16px",
+            border: "1.5px solid #ffc107",
+            background: "#fff3cd",
+            color: "#856404",
+            borderRadius: 10,
+            fontSize: 13,
+            fontWeight: 700,
+            cursor: "pointer",
+            marginBottom: 16,
+          }}
+        >
+          🤖{" "}
+          {
+            bookings.filter((b) => b.source === "BOT" && b.status === "PENDING")
+              .length
+          }{" "}
+          new booking request
+          {bookings.filter((b) => b.source === "BOT" && b.status === "PENDING")
+            .length !== 1
+            ? "s"
+            : ""}{" "}
+          from bot — review now
+        </button>
+      )}
+
       {/* Filter bar + status tabs (list view only) */}
       <>
         <div
@@ -946,9 +986,32 @@ export default function BookingsPage() {
             ))}
           </select>
 
+          <select
+            value={filterSource}
+            onChange={(e) => setFilterSource(e.target.value)}
+            style={{
+              padding: "9px 12px",
+              border: "1.5px solid var(--brand-border)",
+              borderRadius: 10,
+              fontSize: 13,
+              color: "var(--brand-text)",
+              background: "var(--background)",
+              outline: "none",
+              cursor: "pointer",
+              fontFamily: "inherit",
+            }}
+          >
+            <option value="ALL">All Sources</option>
+            <option value="BOT">🤖 Bot / API</option>
+            <option value="DIRECT">🔗 Direct</option>
+            <option value="AIRBNB">🏠 Airbnb</option>
+            <option value="MANUAL">✏️ Manual</option>
+          </select>
+
           {/* Clear filters */}
           {(filterProperty !== "ALL" ||
             filterPayment !== "ALL" ||
+            filterSource !== "ALL" ||
             searchQuery ||
             filterStatus !== "ALL") && (
             <button
@@ -1174,14 +1237,14 @@ export default function BookingsPage() {
                           label: "Check-in",
                           val: `${new Date(b.checkIn).toLocaleDateString(
                             "en-PH",
-                            { month: "short", day: "numeric", year: "numeric" },
+                            { month: "short", day: "numeric", year: "numeric" }
                           )} ${b.checkInTime || ""}`,
                         },
                         {
                           label: "Check-out",
                           val: `${new Date(b.checkOut).toLocaleDateString(
                             "en-PH",
-                            { month: "short", day: "numeric", year: "numeric" },
+                            { month: "short", day: "numeric", year: "numeric" }
                           )} ${b.checkOutTime || ""}`,
                         },
                         {
@@ -1382,7 +1445,7 @@ export default function BookingsPage() {
                                           month: "short",
                                           day: "numeric",
                                           year: "numeric",
-                                        },
+                                        }
                                       )}
                                     </span>
                                   )}
@@ -1784,7 +1847,7 @@ export default function BookingsPage() {
                                   weekday: "short",
                                   month: "short",
                                   day: "numeric",
-                                },
+                                }
                               )}
                             </span>
                             <div
@@ -1853,42 +1916,49 @@ export default function BookingsPage() {
               )}
 
               {alternateUnits.length > 0 && (
-  <div
-    style={{
-      background: "#eef9f4",
-      border: "1px solid #b7e4c7",
-      borderRadius: 8,
-      padding: "12px 14px",
-    }}
-  >
-    <div style={{ fontSize: 12, fontWeight: 700, color: "#1b7a4a", marginBottom: 8 }}>
-      {conflictWarning
-        ? "This unit is booked — other units free for these dates:"
-        : "Also available for these dates:"}
-    </div>
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-      {alternateUnits.map((p) => (
-        <button
-          key={p.id}
-          type="button"
-          onClick={() => handleFormChange({ propertyId: p.id })}
-          style={{
-            padding: "6px 12px",
-            borderRadius: 20,
-            fontSize: 12,
-            fontWeight: 600,
-            border: "1.5px solid #b7e4c7",
-            background: "var(--background)",
-            color: "#1b7a4a",
-            cursor: "pointer",
-          }}
-        >
-          {p.name} →
-        </button>
-      ))}
-    </div>
-  </div>
-)}
+                <div
+                  style={{
+                    background: "#eef9f4",
+                    border: "1px solid #b7e4c7",
+                    borderRadius: 8,
+                    padding: "12px 14px",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: "#1b7a4a",
+                      marginBottom: 8,
+                    }}
+                  >
+                    {conflictWarning
+                      ? "This unit is booked — other units free for these dates:"
+                      : "Also available for these dates:"}
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    {alternateUnits.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => handleFormChange({ propertyId: p.id })}
+                        style={{
+                          padding: "6px 12px",
+                          borderRadius: 20,
+                          fontSize: 12,
+                          fontWeight: 600,
+                          border: "1.5px solid #b7e4c7",
+                          background: "var(--background)",
+                          color: "#1b7a4a",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {p.name} →
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* No conflict indicator */}
               {!conflictWarning && form.checkIn && form.checkOut && (
@@ -2452,8 +2522,8 @@ export default function BookingsPage() {
                   {saving
                     ? "Saving..."
                     : editingId
-                      ? "Update Booking"
-                      : "Create Booking"}
+                    ? "Update Booking"
+                    : "Create Booking"}
                 </button>
               </div>
             </form>
