@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 
-// Keep this in sync with the RATES table in app/dashboard/bookings/page.tsx
 const RATES = {
   "Day (Short) 8AM-8PM": {
     hours: 12,
@@ -28,9 +27,45 @@ const RATES = {
 
 type StayType = keyof typeof RATES;
 
+const STAY_TYPE_ALIASES: Record<string, StayType> = {
+  "day (short) 8am-8pm": "Day (Short) 8AM-8PM",
+  "night (short) 9pm-7am": "Night (Short) 9PM-7AM",
+  "day (long) 2pm-11am": "Day (Long) 2PM-11AM",
+  day_short: "Day (Short) 8AM-8PM",
+  night_short: "Night (Short) 9PM-7AM",
+  day_long: "Day (Long) 2PM-11AM",
+  day: "Day (Short) 8AM-8PM",
+  daytime: "Day (Short) 8AM-8PM",
+  araw: "Day (Short) 8AM-8PM",
+  night: "Night (Short) 9PM-7AM",
+  overnight: "Night (Short) 9PM-7AM",
+  gabi: "Night (Short) 9PM-7AM",
+  long: "Day (Long) 2PM-11AM",
+  "long stay": "Day (Long) 2PM-11AM",
+};
+
+function normalizeStayType(input: string): StayType | null {
+  if (!input) return null;
+  const key = input.trim().toLowerCase();
+  return STAY_TYPE_ALIASES[key] || null;
+}
+
 function isWeekendDay(d: Date) {
   const day = d.getDay();
   return day === 5 || day === 6 || day === 0;
+}
+
+// Robust parse: handles "YYYY-MM-DD" and messier strings like
+// "7/23/26, 3:00 PM GMT+8" — falls back to native Date parsing.
+function safeParseDate(input: string): Date | null {
+  const d = new Date(input);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function manilaDateOnly(date: Date): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila" }).format(
+    date
+  );
 }
 
 function parseDateTime(dateStr: string, timeStr: string | null): number {
@@ -53,12 +88,12 @@ function buildTimestamp(dateStr: string, timeStr: string): string {
 
 function computeStayFields(
   stayType: StayType,
-  checkIn: string,
-  checkOut: string
+  checkInDateOnly: string,
+  checkOutDateOnly: string
 ) {
   const rate = RATES[stayType];
-  const start = new Date(checkIn);
-  const end = new Date(checkOut);
+  const start = new Date(checkInDateOnly);
+  const end = new Date(checkOutDateOnly);
   const nightsCount = Math.max(
     1,
     Math.round((end.getTime() - start.getTime()) / 86400000)
@@ -95,21 +130,21 @@ export async function POST(req: NextRequest) {
   }
 
   const {
-    propertyId, // preferred: exact Property.id
-    unitNumber, // fallback: e.g. "1116" — resolved via ilike
+    propertyId,
+    unitNumber,
     guestName,
     guestEmail,
     contactNo,
     guestCount,
-    platform, // Facebook / TikTok / Instagram etc.
-    stayType, // must match one of the RATES keys
-    checkIn, // "YYYY-MM-DD"
-    checkOut, // "YYYY-MM-DD"
+    platform,
+    stayType,
+    checkIn,
+    checkOut,
     notes,
-    psid, // Facebook PSID, stored in notes for traceability
+    psid,
   } = body || {};
 
-  // --- Validation ---
+  // --- Basic validation ---
   if (!guestName || !checkIn || !checkOut || !stayType) {
     return NextResponse.json(
       {
@@ -119,99 +154,152 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     );
   }
-  if (!RATES[stayType as StayType]) {
+
+  const normalizedStayType = normalizeStayType(stayType);
+  if (!normalizedStayType) {
     return NextResponse.json(
       {
-        error: `Invalid stayType. Must be one of: ${Object.keys(RATES).join(
-          ", "
-        )}`,
+        error: `Invalid stayType. Accepted: day_short, night_short, day_long (or full labels: ${Object.keys(
+          RATES
+        ).join(", ")})`,
       },
       { status: 400 }
     );
   }
-  if (new Date(checkOut) < new Date(checkIn)) {
+
+  const checkInParsed = safeParseDate(checkIn);
+  const checkOutParsed = safeParseDate(checkOut);
+  if (!checkInParsed || !checkOutParsed) {
+    return NextResponse.json(
+      { error: "checkIn/checkOut could not be parsed as valid dates" },
+      { status: 400 }
+    );
+  }
+
+  const checkInDateOnly = manilaDateOnly(checkInParsed);
+  const checkOutDateOnly = manilaDateOnly(checkOutParsed);
+
+  if (new Date(checkOutDateOnly) < new Date(checkInDateOnly)) {
     return NextResponse.json(
       { error: "checkOut must be on or after checkIn" },
       { status: 400 }
     );
   }
-  if (!propertyId && !unitNumber) {
-    return NextResponse.json(
-      { error: "Provide either propertyId or unitNumber" },
-      { status: 400 }
-    );
-  }
 
-  // --- Resolve property ---
-  let resolvedPropertyId = propertyId;
-  if (!resolvedPropertyId) {
-    const { data: propMatch, error: propErr } = await supabase
+  // --- Compute stay fields (based on Manila-normalized dates) ---
+  const stayFields = computeStayFields(
+    normalizedStayType,
+    checkInDateOnly,
+    checkOutDateOnly
+  );
+  const newIn = parseDateTime(checkInDateOnly, stayFields.checkInTime);
+  const newOut = parseDateTime(checkOutDateOnly, stayFields.checkOutTime);
+  const newIsLong = normalizedStayType.includes("Long");
+
+  // --- Resolve candidate properties ---
+  let candidateProperties: { id: string; name: string }[] = [];
+
+  if (propertyId) {
+    const { data } = await supabase
+      .from("Property")
+      .select("id, name")
+      .eq("id", propertyId)
+      .limit(1);
+    candidateProperties = data || [];
+  } else if (unitNumber) {
+    const { data } = await supabase
       .from("Property")
       .select("id, name")
       .ilike("name", `%${unitNumber}%`)
       .limit(1);
-    if (propErr || !propMatch || propMatch.length === 0) {
+    candidateProperties = data || [];
+  } else {
+    // Auto-assign: search all properties for this owner
+    const { data, error: allPropsErr } = await supabase
+      .from("Property")
+      .select("id, name")
+      .eq("owner_id", process.env.BOT_OWNER_ID);
+    if (allPropsErr || !data || data.length === 0) {
       return NextResponse.json(
-        { error: `No property found matching "${unitNumber}"` },
-        { status: 404 }
+        { error: "No properties available to check" },
+        { status: 500 }
       );
     }
-    resolvedPropertyId = propMatch[0].id;
+    candidateProperties = data;
   }
 
-  // --- Compute stay fields ---
-  const stayFields = computeStayFields(stayType as StayType, checkIn, checkOut);
-  const newIn = parseDateTime(checkIn, stayFields.checkInTime);
-  const newOut = parseDateTime(checkOut, stayFields.checkOutTime);
-  const newIsLong = (stayType as string).includes("Long");
-
-  // --- Conflict check (mirrors checkConflict in bookings page) ---
-  const { data: existing, error: fetchErr } = await supabase
-    .from("Booking")
-    .select(
-      "id, guestName, checkIn, checkOut, checkInTime, checkOutTime, stayType, status, propertyId"
-    )
-    .eq("propertyId", resolvedPropertyId)
-    .not("status", "in", '("CANCELLED","CHECKED_OUT")');
-
-  if (fetchErr) {
-    return NextResponse.json({ error: fetchErr.message }, { status: 500 });
+  if (candidateProperties.length === 0) {
+    return NextResponse.json(
+      {
+        error: unitNumber
+          ? `No property found matching "${unitNumber}"`
+          : "No matching property found",
+      },
+      { status: 404 }
+    );
   }
 
-  const overlapping = (existing || []).filter((b) => {
-    const bIn = parseDateTime(b.checkIn, b.checkInTime);
-    const bOut = parseDateTime(b.checkOut, b.checkOutTime);
-    return newIn < bOut && newOut > bIn;
-  });
+  // --- Find first available unit among candidates ---
+  let resolvedProperty: { id: string; name: string } | null = null;
+  let lastConflict: any = null;
 
-  if (overlapping.length > 0) {
+  for (const prop of candidateProperties) {
+    const { data: existing, error: fetchErr } = await supabase
+      .from("Booking")
+      .select(
+        "id, guestName, checkIn, checkOut, checkInTime, checkOutTime, stayType, status, propertyId"
+      )
+      .eq("propertyId", prop.id)
+      .not("status", "in", '("CANCELLED","CHECKED_OUT")');
+
+    if (fetchErr) {
+      return NextResponse.json({ error: fetchErr.message }, { status: 500 });
+    }
+
+    const overlapping = (existing || []).filter((b) => {
+      const bIn = parseDateTime(b.checkIn, b.checkInTime);
+      const bOut = parseDateTime(b.checkOut, b.checkOutTime);
+      return newIn < bOut && newOut > bIn;
+    });
+
     const existingHasLong = overlapping.some((b) =>
       (b.stayType || "").includes("Long")
     );
-    if (newIsLong || existingHasLong || overlapping.length >= 2) {
-      return NextResponse.json(
-        {
-          error: "Fully booked for these dates",
-          conflict: true,
-          conflictingBooking: overlapping[0],
-        },
-        { status: 409 }
-      );
+    const blocked =
+      overlapping.length > 0 &&
+      (newIsLong || existingHasLong || overlapping.length >= 2);
+
+    if (!blocked) {
+      resolvedProperty = prop;
+      break;
+    } else {
+      lastConflict = overlapping[0];
     }
+  }
+
+  if (!resolvedProperty) {
+    return NextResponse.json(
+      {
+        error: "Fully booked — no units available for these dates",
+        conflict: true,
+        conflictingBooking: lastConflict,
+      },
+      { status: 409 }
+    );
   }
 
   // --- Insert booking as PENDING ---
   const bookingPayload = {
-    propertyId: resolvedPropertyId,
+    propertyId: resolvedProperty.id,
     guestName,
     guestEmail: guestEmail || null,
     contactNo: contactNo || null,
     guestCount: guestCount ? Number(guestCount) : 1,
-    bookedBy: null, // unattributed — came in via bot, not staff
+    bookedBy: null,
     platform: platform || "Facebook",
-    stayType,
-    checkIn: buildTimestamp(checkIn, stayFields.checkInTime),
-    checkOut: buildTimestamp(checkOut, stayFields.checkOutTime),
+    stayType: normalizedStayType,
+    checkIn: buildTimestamp(checkInDateOnly, stayFields.checkInTime),
+    checkOut: buildTimestamp(checkOutDateOnly, stayFields.checkOutTime),
     checkInTime: stayFields.checkInTime,
     checkOutTime: stayFields.checkOutTime,
     hoursStayed: stayFields.hoursStayed,
@@ -239,6 +327,10 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     success: true,
     booking: created,
-    summary: `Booking request received for ${guestName}, ${checkIn} to ${checkOut}. Status: PENDING confirmation.`,
+    summary: `Booking request received po! Unit ${
+      resolvedProperty.name
+    }, ${normalizedStayType}, ${checkInDateOnly} to ${checkOutDateOnly}. Total: ₱${stayFields.totalFee.toLocaleString(
+      "en-PH"
+    )}. Status: naghihintay pa po ng confirmation 🙏`,
   });
 }
