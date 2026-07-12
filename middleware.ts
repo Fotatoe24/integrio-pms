@@ -17,6 +17,7 @@ const publicRoutes = [
   "/api/bot/availability",
   "/api/bot/parse-availability",
   "/api/bot/create-booking",
+  "/api/bot/check-booking-status",
 ];
 
 export function middleware(req: NextRequest) {
