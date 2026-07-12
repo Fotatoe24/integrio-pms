@@ -13,9 +13,11 @@ type Tab =
   | "Expenses"
   | "Payments"
   | "Bookings"
-  | "Calendar";
+  | "Calendar"
+  | "Redflags"
+  | "Checklist";
 
-type OverviewMode = "week" | "month";
+type OverviewMode = "week" | "month" | "year";
 
 interface Employee {
   id: string;
@@ -68,9 +70,6 @@ interface Booking {
   totalFee: number | null;
   status: string;
   source: string;
-  // NOTE: adjust this field name to whatever your `Booking` table actually
-  // uses to record which employee took/created the booking (e.g. "bookedBy",
-  // "createdBy", "bookerId"). It drives the commission leaderboard below.
   bookedBy?: string | null;
   Property?: { name: string };
   Payment?: Payment[];
@@ -81,10 +80,28 @@ interface Property {
   name: string;
 }
 
+interface RedFlag {
+  type: "PUNCTUALITY" | "DIRTY_UNIT" | "UNPAID_BALANCE";
+  severity: "warn" | "danger";
+  message: string;
+}
+
+interface ChecklistItemRow {
+  id: string;
+  label: string;
+  sort_order: number;
+}
+
+interface ChecklistRow {
+  id: string;
+  title: string;
+  is_active: boolean;
+  createdAt: string;
+  ChecklistItem: ChecklistItemRow[];
+}
+
 const ROLES = ["booker", "auditor", "housekeeping"];
 
-// Flat commission paid per booking handled (not a percentage). Change this
-// if your actual rate differs.
 const COMMISSION_PER_BOOKING = 100;
 const BOOKINGS_PER_PAGE = 8;
 const PAYMENTS_PER_PAGE = 8;
@@ -121,6 +138,12 @@ const CATEGORY_COLORS: Record<string, { bg: string; color: string }> = {
   other: { bg: "#e8d5f5", color: "#5a2d82" },
 };
 
+const FLAG_META: Record<RedFlag["type"], { icon: string; label: string }> = {
+  PUNCTUALITY: { icon: "⏰", label: "Punctuality" },
+  DIRTY_UNIT: { icon: "🧹", label: "Unit not ready" },
+  UNPAID_BALANCE: { icon: "💸", label: "Unpaid balance" },
+};
+
 // ── Date range helpers ──────────────────────────────────────────────────
 
 function startOfDay(d: Date) {
@@ -135,12 +158,12 @@ function endOfDay(d: Date) {
   return c;
 }
 
-function getWeekRange(base: Date): [Date, Date] {
+function getWeekRange(base: Date, offset: number = 0): [Date, Date] {
   const d = new Date(base);
-  const day = d.getDay(); // 0 = Sun ... 6 = Sat
+  const day = d.getDay();
   const diffToMonday = day === 0 ? -6 : 1 - day;
   const monday = new Date(d);
-  monday.setDate(d.getDate() + diffToMonday);
+  monday.setDate(d.getDate() + diffToMonday + offset * 7);
   const sunday = new Date(monday);
   sunday.setDate(monday.getDate() + 6);
   return [startOfDay(monday), endOfDay(sunday)];
@@ -160,6 +183,13 @@ function getMonthRange(base: Date, offset: number): [Date, Date] {
   return [startOfDay(start), end];
 }
 
+function getYearRange(base: Date, offset: number): [Date, Date] {
+  const year = base.getFullYear() + offset;
+  const start = new Date(year, 0, 1);
+  const end = new Date(year, 11, 31, 23, 59, 59, 999);
+  return [startOfDay(start), end];
+}
+
 function inRange(iso: string | null | undefined, range: [Date, Date]) {
   if (!iso) return false;
   const t = new Date(iso).getTime();
@@ -167,6 +197,9 @@ function inRange(iso: string | null | undefined, range: [Date, Date]) {
 }
 
 function formatRangeLabel(range: [Date, Date], mode: OverviewMode) {
+  if (mode === "year") {
+    return range[0].toLocaleDateString("en-PH", { year: "numeric" });
+  }
   if (mode === "month") {
     return range[0].toLocaleDateString("en-PH", {
       month: "long",
@@ -185,7 +218,7 @@ function formatRangeLabel(range: [Date, Date], mode: OverviewMode) {
   return `${startLabel} – ${endLabel}`;
 }
 
-// ── Shared stat computation (used for both period + tab totals) ────────
+// ── Shared stat computation ─────────────────────────────────────────────
 
 interface StatBundle {
   totalIncome: number;
@@ -302,7 +335,24 @@ export default function OwnerPage() {
 
   // Overview period filter
   const [overviewMode, setOverviewMode] = useState<OverviewMode>("week");
-  const [monthOffset, setMonthOffset] = useState(0);
+  const [periodOffset, setPeriodOffset] = useState(0);
+
+  // Redflags
+  const [flags, setFlags] = useState<RedFlag[]>([]);
+  const [flagsLoading, setFlagsLoading] = useState(true);
+
+  // Checklist manager
+  const [checklists, setChecklists] = useState<ChecklistRow[]>([]);
+  const [checklistLoading, setChecklistLoading] = useState(true);
+  const [newChecklistTitle, setNewChecklistTitle] = useState("");
+  const [newChecklistItems, setNewChecklistItems] = useState("");
+  const [creatingChecklist, setCreatingChecklist] = useState(false);
+  const [editingChecklistId, setEditingChecklistId] = useState<string | null>(
+    null
+  );
+  const [editTitle, setEditTitle] = useState("");
+  const [editItemsText, setEditItemsText] = useState("");
+  const [savingChecklist, setSavingChecklist] = useState(false);
 
   useEffect(() => {
     document.title = "Owner — Integrio";
@@ -310,6 +360,8 @@ export default function OwnerPage() {
     if (u) {
       setUser(u);
       loadAll(u);
+      loadFlags(u);
+      loadChecklists(u);
     }
   }, []);
 
@@ -317,7 +369,6 @@ export default function OwnerPage() {
     setLoading(true);
     const ownerId = u.id;
 
-    // Step 1 — get owner's properties first
     const { data: props } = await supabase
       .from("Property")
       .select("id, name")
@@ -326,7 +377,6 @@ export default function OwnerPage() {
     const propertyIds = (props ?? []).map((p) => p.id);
     setProperties(props ?? []);
 
-    // Step 2 — get bookings only for those properties
     const { data: book } =
       propertyIds.length > 0
         ? await supabase
@@ -338,7 +388,6 @@ export default function OwnerPage() {
             .order("checkIn", { ascending: false })
         : { data: [] };
 
-    // Step 3 — get payments only for those bookings
     const bookingIds = (book ?? []).map((b) => b.id);
     const { data: pay } =
       bookingIds.length > 0
@@ -349,7 +398,6 @@ export default function OwnerPage() {
             .order("createdAt", { ascending: false })
         : { data: [] };
 
-    // Step 4 — employees and expenses (already scoped by owner_id)
     const [{ data: emp }, { data: exp }] = await Promise.all([
       supabase
         .from("User")
@@ -377,6 +425,100 @@ export default function OwnerPage() {
     if (pay) setPayments(pay);
     if (book) setBookings(book);
     setLoading(false);
+  }
+
+  async function loadFlags(u: IntegrioUser) {
+    setFlagsLoading(true);
+    try {
+      const res = await fetch(`/api/owner/redflags?owner_id=${u.id}`);
+      const json = await res.json();
+      setFlags(json.flags || []);
+    } catch {
+      setFlags([]);
+    }
+    setFlagsLoading(false);
+  }
+
+  async function loadChecklists(u: IntegrioUser) {
+    setChecklistLoading(true);
+    try {
+      const res = await fetch(`/api/owner/checklist?owner_id=${u.id}`);
+      const json = await res.json();
+      setChecklists(json.checklists || []);
+    } catch {
+      setChecklists([]);
+    }
+    setChecklistLoading(false);
+  }
+
+  async function handleCreateChecklist() {
+    if (!newChecklistTitle.trim() || !user) return;
+    const items = newChecklistItems
+      .split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (items.length === 0) return;
+
+    setCreatingChecklist(true);
+    try {
+      const res = await fetch("/api/owner/checklist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          owner_id: user.id,
+          title: newChecklistTitle.trim(),
+          items,
+        }),
+      });
+      if (res.ok) {
+        setNewChecklistTitle("");
+        setNewChecklistItems("");
+        loadChecklists(user);
+      }
+    } finally {
+      setCreatingChecklist(false);
+    }
+  }
+
+  function startEditChecklist(c: ChecklistRow) {
+    setEditingChecklistId(c.id);
+    setEditTitle(c.title);
+    setEditItemsText(
+      [...c.ChecklistItem]
+        .sort((a, b) => a.sort_order - b.sort_order)
+        .map((i) => i.label)
+        .join("\n")
+    );
+  }
+
+  async function handleSaveChecklist(id: string) {
+    const items = editItemsText
+      .split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    setSavingChecklist(true);
+    try {
+      const res = await fetch("/api/owner/checklist", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, title: editTitle.trim(), items }),
+      });
+      if (res.ok) {
+        setEditingChecklistId(null);
+        if (user) loadChecklists(user);
+      }
+    } finally {
+      setSavingChecklist(false);
+    }
+  }
+
+  async function handleDeleteChecklist(id: string) {
+    if (!confirm("Remove this checklist? Housekeeping will no longer see it."))
+      return;
+    const res = await fetch(`/api/owner/checklist?id=${id}`, {
+      method: "DELETE",
+    });
+    if (res.ok && user) loadChecklists(user);
   }
 
   async function handleAddReceiver() {
@@ -510,10 +652,10 @@ export default function OwnerPage() {
   // ── Period range for Overview ─────────────────────────────────────────
   const periodRange = useMemo<[Date, Date]>(() => {
     const now = new Date();
-    return overviewMode === "week"
-      ? getWeekRange(now)
-      : getMonthRange(now, monthOffset);
-  }, [overviewMode, monthOffset]);
+    if (overviewMode === "week") return getWeekRange(now, periodOffset);
+    if (overviewMode === "year") return getYearRange(now, periodOffset);
+    return getMonthRange(now, periodOffset);
+  }, [overviewMode, periodOffset]);
 
   const periodLabel = useMemo(
     () => formatRangeLabel(periodRange, overviewMode),
@@ -538,23 +680,13 @@ export default function OwnerPage() {
     [periodBookings, periodPayments, periodExpenses]
   );
 
-  // Real-time (not period-scoped) counters — these describe current state,
-  // not activity within the selected window.
-  const activeBookings = bookings.filter(
-    (b) => b.status === "CHECKED_IN"
-  ).length;
   const activeTeamSize = employees.filter((e) => e.status !== "revoked").length;
 
-  function shiftMonth(delta: number) {
-    setOverviewMode("month");
-    setMonthOffset((m) => m + delta);
+  function shiftPeriod(delta: number) {
+    setPeriodOffset((o) => o + delta);
   }
 
   // ── Commission leaderboard ──────────────────────────────────────────
-  // Commission is a flat ₱100 per booking a person personally handled/guided
-  // (not a cut of revenue). The owner can earn it too, since you personally
-  // guide guests sometimes — so the owner is included alongside employees.
-  // Cancelled bookings don't count.
   const leaderboard = useMemo(() => {
     const people: { id: string; name: string; role: string }[] = [
       ...(user ? [{ id: user.id, name: user.name, role: "owner" }] : []),
@@ -637,6 +769,8 @@ export default function OwnerPage() {
 
   const TABS: Tab[] = [
     "Overview",
+    "Redflags",
+    "Checklist",
     "Employees",
     "Receivers",
     "Expenses",
@@ -655,6 +789,12 @@ export default function OwnerPage() {
     outline: "none",
     fontFamily: "inherit",
     background: "var(--brand-surface)",
+  };
+
+  const textareaStyle: React.CSSProperties = {
+    ...inputStyle,
+    resize: "vertical",
+    lineHeight: 1.6,
   };
 
   const labelStyle: React.CSSProperties = {
@@ -678,6 +818,9 @@ export default function OwnerPage() {
     cursor: disabled ? "not-allowed" : "pointer",
     opacity: disabled ? 0.5 : 1,
   });
+
+  const dangerFlags = flags.filter((f) => f.severity === "danger").length;
+  const warnFlags = flags.filter((f) => f.severity === "warn").length;
 
   if (!user) return null;
 
@@ -705,7 +848,6 @@ export default function OwnerPage() {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          {/* Logo — swaps with theme via Tailwind's dark: variant */}
           <img
             src="/blacklogo.png"
             alt="Integrio"
@@ -732,6 +874,27 @@ export default function OwnerPage() {
           >
             Owner
           </span>
+
+          {!flagsLoading && flags.length > 0 && (
+            <button
+              onClick={() => setActiveTab("Redflags")}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                fontSize: 12,
+                fontWeight: 700,
+                background: dangerFlags > 0 ? "#f8d7da" : "#fff3cd",
+                color: dangerFlags > 0 ? "#721c24" : "#856404",
+                border: "none",
+                borderRadius: 20,
+                padding: "4px 12px",
+                cursor: "pointer",
+              }}
+            >
+              🚩 {flags.length} flag{flags.length === 1 ? "" : "s"}
+            </button>
+          )}
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
@@ -808,35 +971,33 @@ export default function OwnerPage() {
                 flexWrap: "wrap",
               }}
             >
-              {overviewMode === "month" && (
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <button
-                    onClick={() => shiftMonth(-1)}
-                    aria-label="Previous month"
-                    style={paginationBtnStyle(false)}
-                  >
-                    ‹
-                  </button>
-                  <span
-                    style={{
-                      fontSize: 13,
-                      fontWeight: 600,
-                      color: "var(--brand-text)",
-                      minWidth: 130,
-                      textAlign: "center",
-                    }}
-                  >
-                    {periodLabel}
-                  </span>
-                  <button
-                    onClick={() => shiftMonth(1)}
-                    aria-label="Next month"
-                    style={paginationBtnStyle(false)}
-                  >
-                    ›
-                  </button>
-                </div>
-              )}
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <button
+                  onClick={() => shiftPeriod(-1)}
+                  aria-label="Previous period"
+                  style={paginationBtnStyle(false)}
+                >
+                  ‹
+                </button>
+                <span
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: "var(--brand-text)",
+                    minWidth: 130,
+                    textAlign: "center",
+                  }}
+                >
+                  {periodLabel}
+                </span>
+                <button
+                  onClick={() => shiftPeriod(1)}
+                  aria-label="Next period"
+                  style={paginationBtnStyle(false)}
+                >
+                  ›
+                </button>
+              </div>
               <div
                 style={{
                   display: "flex",
@@ -845,12 +1006,12 @@ export default function OwnerPage() {
                   overflow: "hidden",
                 }}
               >
-                {(["week", "month"] as OverviewMode[]).map((m) => (
+                {(["week", "month", "year"] as OverviewMode[]).map((m) => (
                   <button
                     key={m}
                     onClick={() => {
                       setOverviewMode(m);
-                      if (m === "month") setMonthOffset(0);
+                      setPeriodOffset(0);
                     }}
                     style={{
                       padding: "8px 16px",
@@ -868,7 +1029,7 @@ export default function OwnerPage() {
                           : "var(--brand-text-muted)",
                     }}
                   >
-                    {m === "week" ? "Weekly" : "Monthly"}
+                    {m === "week" ? "Weekly" : m === "month" ? "Monthly" : "Yearly"}
                   </button>
                 ))}
               </div>
@@ -970,7 +1131,11 @@ export default function OwnerPage() {
                         }}
                       >
                         Income minus expenses for this{" "}
-                        {overviewMode === "week" ? "week" : "month"}
+                        {overviewMode === "week"
+                          ? "week"
+                          : overviewMode === "month"
+                          ? "month"
+                          : "year"}
                       </div>
                     </div>
                     <div style={{ display: "flex", gap: 32, flexWrap: "wrap" }}>
@@ -1012,79 +1177,6 @@ export default function OwnerPage() {
                     </div>
                   </div>
 
-                  {/* Collection progress */}
-                  <div
-                    style={{
-                      background: "var(--brand-surface)",
-                      border: "1px solid var(--brand-border)",
-                      borderRadius: 16,
-                      padding: "22px 28px",
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        marginBottom: 14,
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontSize: 14,
-                          fontWeight: 600,
-                          color: "var(--brand-text)",
-                        }}
-                      >
-                        Collection progress
-                      </span>
-                      <span
-                        style={{
-                          fontSize: 13,
-                          fontWeight: 700,
-                          color: "var(--brand-text)",
-                        }}
-                      >
-                        {periodStats.collectionPct}% collected
-                      </span>
-                    </div>
-                    <div
-                      style={{
-                        height: 8,
-                        borderRadius: 8,
-                        background: "var(--brand-border)",
-                        overflow: "hidden",
-                      }}
-                    >
-                      <div
-                        style={{
-                          height: "100%",
-                          width: `${periodStats.collectionPct}%`,
-                          background: "#a3e635",
-                          borderRadius: 8,
-                          transition: "width 0.3s",
-                        }}
-                      />
-                    </div>
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        marginTop: 10,
-                        fontSize: 12,
-                        color: "var(--brand-text-muted)",
-                      }}
-                    >
-                      <span>
-                        {formatCurrency(periodStats.pendingCollection)} pending
-                      </span>
-                      <span>
-                        {formatCurrency(periodStats.expectedRevenue)} expected
-                        total
-                      </span>
-                    </div>
-                  </div>
-
                   {/* Quick stats */}
                   <div
                     style={{
@@ -1096,11 +1188,6 @@ export default function OwnerPage() {
                   >
                     {[
                       {
-                        icon: "📋",
-                        value: String(activeBookings),
-                        label: "Active bookings (now)",
-                      },
-                      {
                         icon: "👥",
                         value: String(activeTeamSize),
                         label: "Team size",
@@ -1109,7 +1196,11 @@ export default function OwnerPage() {
                         icon: "📅",
                         value: String(periodStats.bookingsCount),
                         label: `Bookings this ${
-                          overviewMode === "week" ? "week" : "month"
+                          overviewMode === "week"
+                            ? "week"
+                            : overviewMode === "month"
+                            ? "month"
+                            : "year"
                         }`,
                       },
                     ].map((s) => (
@@ -1350,18 +1441,424 @@ export default function OwnerPage() {
                         : "var(--brand-text-muted)",
                     cursor: "pointer",
                     transition: "all 0.2s",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
                   }}
                 >
                   {tab}
+                  {tab === "Redflags" && flags.length > 0 && (
+                    <span
+                      style={{
+                        background:
+                          activeTab === tab ? "var(--brand-bg)" : "#e74c3c",
+                        color: activeTab === tab ? "var(--brand-text)" : "white",
+                        borderRadius: 20,
+                        fontSize: 10,
+                        fontWeight: 700,
+                        padding: "1px 6px",
+                        minWidth: 16,
+                        textAlign: "center",
+                      }}
+                    >
+                      {flags.length}
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
+
+            {/* ── Redflags ── */}
+            {activeTab === "Redflags" && (
+              <div
+                style={{ display: "flex", flexDirection: "column", gap: 12 }}
+              >
+                {flagsLoading ? (
+                  <div
+                    style={{
+                      textAlign: "center",
+                      padding: 40,
+                      color: "var(--brand-text-muted)",
+                    }}
+                  >
+                    Checking for issues...
+                  </div>
+                ) : flags.length === 0 ? (
+                  <div
+                    style={{
+                      background: "var(--brand-surface)",
+                      borderRadius: 16,
+                      padding: 60,
+                      textAlign: "center",
+                      boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+                      border: "1px solid var(--brand-border)",
+                    }}
+                  >
+                    <div style={{ fontSize: 48, marginBottom: 16 }}>✅</div>
+                    <h3 style={{ color: "var(--brand-text)", marginBottom: 8 }}>
+                      No issues right now
+                    </h3>
+                    <p
+                      style={{ color: "var(--brand-text-muted)", fontSize: 14 }}
+                    >
+                      Punctuality, unit readiness, and payment flags will show
+                      up here.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "flex-end",
+                        marginBottom: 4,
+                      }}
+                    >
+                      <button
+                        onClick={() => user && loadFlags(user)}
+                        style={paginationBtnStyle(false)}
+                      >
+                        ↻ Refresh
+                      </button>
+                    </div>
+                    {flags.map((f, i) => (
+                      <div
+                        key={i}
+                        style={{
+                          background: "var(--brand-surface)",
+                          borderRadius: 14,
+                          boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+                          border: "1px solid var(--brand-border)",
+                          padding: "16px 20px",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 14,
+                          borderLeft: `4px solid ${
+                            f.severity === "danger" ? "#e74c3c" : "#f0ad4e"
+                          }`,
+                        }}
+                      >
+                        <div style={{ fontSize: 22 }}>
+                          {FLAG_META[f.type]?.icon || "🚩"}
+                        </div>
+                        <div>
+                          <div
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 700,
+                              textTransform: "uppercase",
+                              letterSpacing: "0.05em",
+                              color:
+                                f.severity === "danger"
+                                  ? "#e74c3c"
+                                  : "#856404",
+                              marginBottom: 3,
+                            }}
+                          >
+                            {FLAG_META[f.type]?.label || f.type}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 14,
+                              color: "var(--brand-text)",
+                            }}
+                          >
+                            {f.message}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* ── Checklist (owner-managed template) ── */}
+            {activeTab === "Checklist" && (
+              <div
+                style={{ display: "flex", flexDirection: "column", gap: 16 }}
+              >
+                <div
+                  style={{
+                    background: "var(--brand-surface)",
+                    borderRadius: 16,
+                    boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+                    border: "1px solid var(--brand-border)",
+                    padding: "24px",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: "var(--brand-text-muted)",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.06em",
+                      marginBottom: 14,
+                    }}
+                  >
+                    New cleaning checklist
+                  </div>
+                  <p
+                    style={{
+                      fontSize: 12,
+                      color: "var(--brand-text-muted)",
+                      marginBottom: 14,
+                    }}
+                  >
+                    Applies to all units. Checkboxes reset fresh every day for
+                    housekeeping.
+                  </p>
+                  <div style={{ marginBottom: 12 }}>
+                    <label style={labelStyle}>Title</label>
+                    <input
+                      type="text"
+                      value={newChecklistTitle}
+                      onChange={(e) => setNewChecklistTitle(e.target.value)}
+                      placeholder="e.g. Standard turnover checklist"
+                      style={inputStyle}
+                    />
+                  </div>
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={labelStyle}>
+                      Items (one per line)
+                    </label>
+                    <textarea
+                      value={newChecklistItems}
+                      onChange={(e) => setNewChecklistItems(e.target.value)}
+                      placeholder={
+                        "Strip and replace linens\nSanitize bathroom\nRestock toiletries\nVacuum floors\nCheck AC unit"
+                      }
+                      rows={5}
+                      style={textareaStyle}
+                    />
+                  </div>
+                  <button
+                    onClick={handleCreateChecklist}
+                    disabled={
+                      creatingChecklist ||
+                      !newChecklistTitle.trim() ||
+                      !newChecklistItems.trim()
+                    }
+                    style={{
+                      background:
+                        creatingChecklist ||
+                        !newChecklistTitle.trim() ||
+                        !newChecklistItems.trim()
+                          ? "var(--brand-border)"
+                          : "linear-gradient(135deg, #1a2744, #2cb5b0)",
+                      color:
+                        creatingChecklist ||
+                        !newChecklistTitle.trim() ||
+                        !newChecklistItems.trim()
+                          ? "var(--brand-text-muted)"
+                          : "white",
+                      border: "none",
+                      borderRadius: 10,
+                      padding: "11px 24px",
+                      fontSize: 14,
+                      fontWeight: 600,
+                      cursor:
+                        creatingChecklist ||
+                        !newChecklistTitle.trim() ||
+                        !newChecklistItems.trim()
+                          ? "not-allowed"
+                          : "pointer",
+                    }}
+                  >
+                    {creatingChecklist ? "Creating..." : "+ Create checklist"}
+                  </button>
+                </div>
+
+                {checklistLoading ? (
+                  <div
+                    style={{
+                      textAlign: "center",
+                      padding: 40,
+                      color: "var(--brand-text-muted)",
+                    }}
+                  >
+                    Loading checklists...
+                  </div>
+                ) : checklists.length === 0 ? (
+                  <div
+                    style={{
+                      background: "var(--brand-surface)",
+                      borderRadius: 16,
+                      padding: 60,
+                      textAlign: "center",
+                      boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+                      border: "1px solid var(--brand-border)",
+                    }}
+                  >
+                    <div style={{ fontSize: 48, marginBottom: 16 }}>📋</div>
+                    <h3 style={{ color: "var(--brand-text)", marginBottom: 8 }}>
+                      No checklist yet
+                    </h3>
+                    <p
+                      style={{ color: "var(--brand-text-muted)", fontSize: 14 }}
+                    >
+                      Create one above — housekeeping will see it for every
+                      unit.
+                    </p>
+                  </div>
+                ) : (
+                  checklists.map((c) => (
+                    <div
+                      key={c.id}
+                      style={{
+                        background: "var(--brand-surface)",
+                        borderRadius: 16,
+                        boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+                        border: "1px solid var(--brand-border)",
+                        padding: "20px 24px",
+                      }}
+                    >
+                      {editingChecklistId === c.id ? (
+                        <div
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 12,
+                          }}
+                        >
+                          <input
+                            type="text"
+                            value={editTitle}
+                            onChange={(e) => setEditTitle(e.target.value)}
+                            style={inputStyle}
+                          />
+                          <textarea
+                            value={editItemsText}
+                            onChange={(e) => setEditItemsText(e.target.value)}
+                            rows={5}
+                            style={textareaStyle}
+                          />
+                          <div style={{ display: "flex", gap: 10 }}>
+                            <button
+                              onClick={() => setEditingChecklistId(null)}
+                              style={{
+                                padding: "8px 18px",
+                                border: "1.5px solid var(--brand-border)",
+                                borderRadius: 8,
+                                background: "var(--brand-surface)",
+                                color: "var(--brand-text)",
+                                fontSize: 13,
+                                fontWeight: 600,
+                                cursor: "pointer",
+                              }}
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={() => handleSaveChecklist(c.id)}
+                              disabled={savingChecklist}
+                              style={{
+                                padding: "8px 18px",
+                                background:
+                                  "linear-gradient(135deg, #1a2744, #2cb5b0)",
+                                border: "none",
+                                borderRadius: 8,
+                                color: "white",
+                                fontSize: 13,
+                                fontWeight: 600,
+                                cursor: "pointer",
+                              }}
+                            >
+                              {savingChecklist ? "Saving..." : "Save changes"}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              marginBottom: 12,
+                              flexWrap: "wrap",
+                              gap: 10,
+                            }}
+                          >
+                            <div
+                              style={{
+                                fontSize: 15,
+                                fontWeight: 700,
+                                color: "var(--brand-text)",
+                              }}
+                            >
+                              {c.title}
+                            </div>
+                            <div style={{ display: "flex", gap: 8 }}>
+                              <button
+                                onClick={() => startEditChecklist(c)}
+                                style={{
+                                  padding: "5px 14px",
+                                  borderRadius: 8,
+                                  fontSize: 12,
+                                  fontWeight: 600,
+                                  border: "1.5px solid var(--brand-border)",
+                                  background: "var(--brand-surface)",
+                                  color: "var(--brand-text)",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => handleDeleteChecklist(c.id)}
+                                style={{
+                                  padding: "5px 14px",
+                                  borderRadius: 8,
+                                  fontSize: 12,
+                                  fontWeight: 600,
+                                  border: "1.5px solid #fecaca",
+                                  background: "#fef2f2",
+                                  color: "#e74c3c",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          </div>
+                          <div
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 6,
+                            }}
+                          >
+                            {[...c.ChecklistItem]
+                              .sort((a, b) => a.sort_order - b.sort_order)
+                              .map((item) => (
+                                <div
+                                  key={item.id}
+                                  style={{
+                                    fontSize: 13,
+                                    color: "var(--brand-text-muted)",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 8,
+                                  }}
+                                >
+                                  <span>☐</span> {item.label}
+                                </div>
+                              ))}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
 
             {activeTab === "Receivers" && (
               <div
                 style={{ display: "flex", flexDirection: "column", gap: 16 }}
               >
-                {/* Add receiver */}
                 <div
                   style={{
                     background: "var(--brand-surface)",
@@ -1443,7 +1940,6 @@ export default function OwnerPage() {
                   </div>
                 </div>
 
-                {/* Receivers list */}
                 {receivers.length === 0 ? (
                   <div
                     style={{
@@ -1963,7 +2459,6 @@ export default function OwnerPage() {
                       </div>
                     ))}
 
-                    {/* Pagination */}
                     <div
                       style={{
                         display: "flex",
@@ -2014,7 +2509,6 @@ export default function OwnerPage() {
               <div
                 style={{ display: "flex", flexDirection: "column", gap: 12 }}
               >
-                {/* Filter bar */}
                 <div
                   style={{
                     display: "flex",
@@ -2331,7 +2825,6 @@ export default function OwnerPage() {
                             </div>
                           </div>
 
-                          {/* Payment breakdown */}
                           <div
                             style={{
                               display: "flex",
@@ -2377,7 +2870,6 @@ export default function OwnerPage() {
                       );
                     })}
 
-                    {/* Pagination */}
                     <div
                       style={{
                         display: "flex",

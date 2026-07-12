@@ -18,6 +18,11 @@ const publicRoutes = [
   "/api/bot/parse-availability",
   "/api/bot/create-booking",
   "/api/bot/check-booking-status",
+  "/api/housekeeping/login-log",
+  "/api/housekeeping/schedule",
+  "/api/housekeeping/checklist",
+  "/api/owner/redflags",
+  "/api/owner/checklist",
 ];
 
 export function middleware(req: NextRequest) {
