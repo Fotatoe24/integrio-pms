@@ -196,6 +196,30 @@ function inRange(iso: string | null | undefined, range: [Date, Date]) {
   return t >= range[0].getTime() && t <= range[1].getTime();
 }
 
+function getDaysInRange(range: [Date, Date]) {
+  const ms = range[1].getTime() - range[0].getTime();
+  return Math.max(1, Math.ceil(ms / 86400000));
+}
+
+function computeOccupancy(
+  bookingsSubset: Booking[],
+  unitCount: number,
+  range: [Date, Date]
+): number {
+  const days = getDaysInRange(range);
+  const totalSlots = unitCount * days * 2;
+  if (totalSlots === 0) return 0;
+
+  const occupiedSlots = bookingsSubset
+    .filter((b) => b.status !== "CANCELLED")
+    .reduce((sum, b) => {
+      const slots = b.stayType === "Day (Long) 2PM-11AM" ? 2 : 1;
+      return sum + slots;
+    }, 0);
+
+  return Math.min(100, Math.round((occupiedSlots / totalSlots) * 100));
+}
+
 function formatRangeLabel(range: [Date, Date], mode: OverviewMode) {
   if (mode === "year") {
     return range[0].toLocaleDateString("en-PH", { year: "numeric" });
@@ -680,6 +704,11 @@ export default function OwnerPage() {
     [periodBookings, periodPayments, periodExpenses]
   );
 
+  const periodOccupancy = useMemo(
+    () => computeOccupancy(periodBookings, properties.length, periodRange),
+    [periodBookings, properties, periodRange]
+  );
+
   const activeTeamSize = employees.filter((e) => e.status !== "revoked").length;
 
   function shiftPeriod(delta: number) {
@@ -1029,7 +1058,11 @@ export default function OwnerPage() {
                           : "var(--brand-text-muted)",
                     }}
                   >
-                    {m === "week" ? "Weekly" : m === "month" ? "Monthly" : "Yearly"}
+                    {m === "week"
+                      ? "Weekly"
+                      : m === "month"
+                      ? "Monthly"
+                      : "Yearly"}
                   </button>
                 ))}
               </div>
@@ -1202,6 +1235,12 @@ export default function OwnerPage() {
                             ? "month"
                             : "year"
                         }`,
+                      },
+
+                      {
+                        icon: "🛏️",
+                        value: `${periodOccupancy}%`,
+                        label: "Occupancy rate",
                       },
                     ].map((s) => (
                       <div
@@ -1452,7 +1491,8 @@ export default function OwnerPage() {
                       style={{
                         background:
                           activeTab === tab ? "var(--brand-bg)" : "#e74c3c",
-                        color: activeTab === tab ? "var(--brand-text)" : "white",
+                        color:
+                          activeTab === tab ? "var(--brand-text)" : "white",
                         borderRadius: 20,
                         fontSize: 10,
                         fontWeight: 700,
@@ -1549,9 +1589,7 @@ export default function OwnerPage() {
                               textTransform: "uppercase",
                               letterSpacing: "0.05em",
                               color:
-                                f.severity === "danger"
-                                  ? "#e74c3c"
-                                  : "#856404",
+                                f.severity === "danger" ? "#e74c3c" : "#856404",
                               marginBottom: 3,
                             }}
                           >
@@ -1620,9 +1658,7 @@ export default function OwnerPage() {
                     />
                   </div>
                   <div style={{ marginBottom: 16 }}>
-                    <label style={labelStyle}>
-                      Items (one per line)
-                    </label>
+                    <label style={labelStyle}>Items (one per line)</label>
                     <textarea
                       value={newChecklistItems}
                       onChange={(e) => setNewChecklistItems(e.target.value)}
