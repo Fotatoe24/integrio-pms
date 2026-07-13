@@ -21,22 +21,51 @@ interface Booking {
 
 const DAY_LONG_TYPES = ["Day (Long) 2PM-11AM", "Custom"];
 
+// Categorizes a stayType string into a simple bucket used for the
+// partial-day indicator (Day / Night / Day Long / Other).
+function getStayTypeCategory(stayType: string | null): string {
+  if (!stayType) return "Other";
+  if (DAY_LONG_TYPES.includes(stayType)) return "Day Long";
+  if (stayType.startsWith("Night")) return "Night";
+  if (stayType.startsWith("Day")) return "Day";
+  return "Other";
+}
+
+const STAY_TYPE_COLORS: Record<string, { bg: string; text: string }> = {
+  Day: { bg: "#3b82f6", text: "white" }, // blue
+  Night: { bg: "#8b5cf6", text: "white" }, // purple
+  "Day Long": { bg: "#f97316", text: "white" }, // orange
+  Other: { bg: "#6b7280", text: "white" }, // gray
+};
+
 function getDayAvailability(bookings: Booking[]) {
   const active = bookings.filter(
     (b) => b.status !== "CANCELLED" && b.status !== "CHECKED_OUT"
   );
 
-  if (active.length === 0) return { state: "AVAILABLE", count: 0 };
+  if (active.length === 0)
+    return { state: "AVAILABLE", count: 0, bookedType: null as string | null };
 
   const hasDayLong = active.some((b) =>
     DAY_LONG_TYPES.includes(b.stayType || "")
   );
 
   if (hasDayLong || active.length >= 2) {
-    return { state: "FULLY_BOOKED", count: active.length };
+    return {
+      state: "FULLY_BOOKED",
+      count: active.length,
+      bookedType: null as string | null,
+    };
   }
 
-  return { state: "PARTIAL", count: active.length };
+  // Exactly one short-stay booking occupying the day — this is the
+  // "partial" case. Surface which stay type it is so the remaining
+  // open slot is obvious at a glance.
+  return {
+    state: "PARTIAL",
+    count: active.length,
+    bookedType: getStayTypeCategory(active[0].stayType),
+  };
 }
 
 const STATE_COLORS: Record<
@@ -261,34 +290,77 @@ export default function UnitCalendar({
           padding: "16px 20px",
           marginBottom: 20,
           display: "flex",
-          gap: 24,
-          flexWrap: "wrap",
+          flexDirection: "column",
+          gap: 12,
           boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
         }}
       >
-        {[
-          { label: "Available", color: STATE_COLORS.AVAILABLE.bg },
-          { label: "Partially Available", color: STATE_COLORS.PARTIAL.bg },
-          { label: "Fully Booked", color: STATE_COLORS.FULLY_BOOKED.bg },
-          { label: "Other Month", color: STATE_COLORS.OTHER_MONTH.bg },
-        ].map((item) => (
-          <div
-            key={item.label}
-            style={{ display: "flex", alignItems: "center", gap: 8 }}
-          >
+        {/* Availability state legend */}
+        <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
+          {[
+            { label: "Available", color: STATE_COLORS.AVAILABLE.bg },
+            { label: "Partially Available", color: STATE_COLORS.PARTIAL.bg },
+            { label: "Fully Booked", color: STATE_COLORS.FULLY_BOOKED.bg },
+            { label: "Other Month", color: STATE_COLORS.OTHER_MONTH.bg },
+          ].map((item) => (
             <div
-              style={{
-                width: 16,
-                height: 16,
-                borderRadius: 4,
-                background: item.color,
-              }}
-            />
-            <span style={{ fontSize: 13, color: "#1a2744", fontWeight: 500 }}>
-              {item.label}
-            </span>
-          </div>
-        ))}
+              key={item.label}
+              style={{ display: "flex", alignItems: "center", gap: 8 }}
+            >
+              <div
+                style={{
+                  width: 16,
+                  height: 16,
+                  borderRadius: 4,
+                  background: item.color,
+                }}
+              />
+              <span style={{ fontSize: 13, color: "#1a2744", fontWeight: 500 }}>
+                {item.label}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {/* Partial-day stay-type legend */}
+        <div
+          style={{
+            display: "flex",
+            gap: 24,
+            flexWrap: "wrap",
+            paddingTop: 12,
+            borderTop: "1px solid #e8edf3",
+          }}
+        >
+          <span
+            style={{
+              fontSize: 12,
+              color: "#8896a5",
+              fontWeight: 600,
+              alignSelf: "center",
+            }}
+          >
+            On partial days, shows type already booked:
+          </span>
+          {["Day", "Night"].map((type) => (
+            <div
+              key={type}
+              style={{ display: "flex", alignItems: "center", gap: 8 }}
+            >
+              <div
+                style={{
+                  width: 16,
+                  height: 16,
+                  borderRadius: 4,
+                  background: STAY_TYPE_COLORS[type].bg,
+                }}
+              />
+              <span style={{ fontSize: 13, color: "#1a2744", fontWeight: 500 }}>
+                {type} booked
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Unit grids */}
@@ -386,7 +458,8 @@ export default function UnitCalendar({
                   property.id,
                   cell.day
                 );
-                const { state, count } = getDayAvailability(dayBookings);
+                const { state, count, bookedType } =
+                  getDayAvailability(dayBookings);
                 const colors = STATE_COLORS[state];
                 const firstBooking = dayBookings.find(
                   (b) => b.status !== "CANCELLED" && b.status !== "CHECKED_OUT"
@@ -398,9 +471,9 @@ export default function UnitCalendar({
                     title={dayBookings
                       .map(
                         (b) =>
-                          `${b.guestName} (${b.checkInTime || ""}-${
-                            b.checkOutTime || ""
-                          })`
+                          `${b.guestName} — ${b.stayType || "Unknown type"} (${
+                            b.checkInTime || ""
+                          }-${b.checkOutTime || ""})`
                       )
                       .join("\n")}
                     style={{
@@ -458,6 +531,26 @@ export default function UnitCalendar({
                         }}
                       >
                         {firstBooking.checkInTime}
+                      </div>
+                    )}
+                    {/* Stay-type indicator, only shown for partial days */}
+                    {state === "PARTIAL" && bookedType && (
+                      <div
+                        style={{
+                          marginTop: 2,
+                          fontSize: 8,
+                          fontWeight: 700,
+                          padding: "1px 5px",
+                          borderRadius: 6,
+                          background:
+                            STAY_TYPE_COLORS[bookedType]?.bg ||
+                            STAY_TYPE_COLORS.Other.bg,
+                          color:
+                            STAY_TYPE_COLORS[bookedType]?.text ||
+                            STAY_TYPE_COLORS.Other.text,
+                        }}
+                      >
+                        {bookedType}
                       </div>
                     )}
                   </div>
