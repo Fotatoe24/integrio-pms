@@ -58,6 +58,17 @@ export default function LoginPage() {
         })
       );
 
+      if (user.role === "housekeeping") {
+        fetch("/api/housekeeping/login-log", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId: user.id,
+            ownerId: user.owner_id ?? user.id,
+          }),
+        }).catch(() => {});
+      }
+
       const roleRoutes: Record<string, string> = {
         owner: "/owner",
         booker: "/dashboard",
