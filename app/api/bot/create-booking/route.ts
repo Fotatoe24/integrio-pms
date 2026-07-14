@@ -177,6 +177,10 @@ function computeStayFields(
   checkOutDateOnly: string
 ) {
   const rate = RATES[stayType];
+  // checkInDateOnly/checkOutDateOnly are already Manila-correct "YYYY-MM-DD"
+  // strings (via manilaDateString), so parsing them as UTC midnight and
+  // walking forward in whole-day UTC increments stays correct regardless
+  // of server timezone — no local .getDate()/.setDate() involved.
   const start = new Date(checkInDateOnly);
   const end = new Date(checkOutDateOnly);
   const nightsCount = Math.max(
@@ -186,9 +190,8 @@ function computeStayFields(
 
   let totalFee = 0;
   for (let i = 0; i < nightsCount; i++) {
-    const d = new Date(start);
-    d.setDate(d.getDate() + i);
-    totalFee += isWeekendDay(d) ? rate.weekend : rate.weekday;
+    const d = new Date(start.getTime() + i * 86400000);
+    totalFee += isWeekendManila(d) ? rate.weekend : rate.weekday;
   }
 
   return {
@@ -213,7 +216,7 @@ function computeCustomFields(checkInParsed: Date, checkOutParsed: Date) {
 
   const category = resolveCategory("Custom", checkInMs, checkOutMs);
   const baseRate = CATEGORY_BASE_RATE[category];
-  const baseFee = isWeekendDay(checkInParsed)
+  const baseFee = isWeekendManila(checkInParsed)
     ? baseRate.weekend
     : baseRate.weekday;
   const overageHours = Math.max(0, Math.ceil(hoursStayed - baseRate.hours));
