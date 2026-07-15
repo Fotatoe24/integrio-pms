@@ -33,6 +33,35 @@ const RATE_TIMES: Record<
   "Day (Long) 2PM-11AM": { checkInTime: "2:00 PM", checkOutTime: "11:00 AM" },
 };
 
+// ManyChat's "Set User Field" steps currently store the short codes below
+// (confirmed from the flow: Day_short / Night_short / Day_long) instead of
+// the exact RATE_TIMES keys above. Without this map, every fixed-type
+// request 400s with "Unknown stayType" before any real availability check
+// runs — normalize here so a naming mismatch on the ManyChat side can't
+// silently break the whole flow. Accepts case/spacing variants defensively
+// since this is the #1 place a typo in ManyChat would go unnoticed.
+const STAY_TYPE_ALIASES: Record<string, StayType> = {
+  day_short: "Day (Short) 8AM-8PM",
+  "day (short)": "Day (Short) 8AM-8PM",
+  "day (short) 8am-8pm": "Day (Short) 8AM-8PM",
+  night_short: "Night (Short) 9PM-7AM",
+  "night (short)": "Night (Short) 9PM-7AM",
+  "night (short) 9pm-7am": "Night (Short) 9PM-7AM",
+  day_long: "Day (Long) 2PM-11AM",
+  "day (long)": "Day (Long) 2PM-11AM",
+  "day (long) 2pm-11am": "Day (Long) 2PM-11AM",
+  custom: "Custom",
+};
+
+function normalizeStayType(raw: string): StayType | null {
+  // Exact match against the canonical keys first (fastest path, and covers
+  // anyone calling the API directly with the "real" strings).
+  if (raw === "Custom" || raw in RATE_TIMES) return raw as StayType;
+
+  const alias = STAY_TYPE_ALIASES[raw.trim().toLowerCase()];
+  return alias ?? null;
+}
+
 // "Day (Long)" (and a Custom booking that spans both windows) occupies BOTH
 // slots, so it isn't a single category the way Day-Short/Night-Short are —
 // it's handled as its own case below.
@@ -360,6 +389,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const normalizedStayType = normalizeStayType(stayType);
+    if (!normalizedStayType) {
+      return NextResponse.json(
+        {
+          error: `Unrecognized stayType: "${stayType}". Expected one of: Day_short, Night_short, Day_long, Custom (or the full RATE_TIMES strings).`,
+        },
+        { status: 400 }
+      );
+    }
+
     // "Custom" (Flexible Time) always carries its own exact datetime window.
     // The 3 fixed types always use a plain date + their RATE_TIMES window —
     // they never take checkInDateTime, even if it's sent.
@@ -368,7 +407,7 @@ export async function POST(req: NextRequest) {
     let checkOutValue: string;
     let checkOutTimeValue: string | null;
 
-    if (stayType === "Custom") {
+    if (normalizedStayType === "Custom") {
       if (!checkInDateTime || !checkOutDateTime) {
         return NextResponse.json(
           {
@@ -383,10 +422,10 @@ export async function POST(req: NextRequest) {
       checkOutValue = checkOutDateTime;
       checkOutTimeValue = null;
     } else {
-      const rateTimes = RATE_TIMES[stayType];
+      const rateTimes = RATE_TIMES[normalizedStayType];
       if (!rateTimes) {
         return NextResponse.json(
-          { error: `Unknown stayType: ${stayType}` },
+          { error: `Unknown stayType: ${normalizedStayType}` },
           { status: 400 }
         );
       }
@@ -471,7 +510,7 @@ export async function POST(req: NextRequest) {
         property.id,
         checkInValue,
         checkOutValue,
-        stayType,
+        normalizedStayType,
         checkInTimeValue,
         checkOutTimeValue
       );
@@ -510,7 +549,7 @@ export async function POST(req: NextRequest) {
     if (bookableUnits.length > 0) {
       summary =
         "Yes, we have availability for those dates! Want to book? Just reply and our team will help you finish up!";
-    } else if (stayType === "Custom") {
+    } else if (normalizedStayType === "Custom") {
       // Flexible-time request with nothing bookable as-asked — search for
       // the earliest alternate hour (same day, then next day) across all
       // units, rather than falling straight to a generic "different date"
