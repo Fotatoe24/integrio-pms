@@ -213,6 +213,106 @@ function checkConflict(
   };
 }
 
+// ---------------------------------------------------------------------------
+// Hour-level alternate-slot suggestion (Custom/Flexible bookings only).
+//
+// Fixed stay types (Day Short / Night Short / Day Long) keep the old
+// "try the other Day/Night category" suggestion further down — their
+// windows are pinned to RATES, so shifting them by an hour would produce a
+// booking outside the rate card. This search is only meaningful for
+// "Custom", where the guest's window is arbitrary to begin with.
+//
+// Search increment: 1 hour (per Phillip).
+// Search scope: forward from the requested check-in time through the end
+// of the NEXT calendar day only — if nothing opens up in that window, the
+// API falls back to a generic "try a different date" message rather than
+// searching further out.
+// Duration: preserved from the guest's original request (shifts the start
+// time, keeps the same length of stay) — ASSUMPTION, no strong preference
+// given. Flip to snapping onto the nearest fixed RATE_TIMES window here if
+// that turns out to be the better guest experience.
+// ---------------------------------------------------------------------------
+
+const SUGGESTION_SEARCH_INCREMENT_MS = 60 * 60 * 1000; // 1 hour
+
+// Raw time-overlap check (with turnaround buffer), ignoring Day/Night
+// category. Used for suggestion search because a Custom slot's actual
+// availability is a pure time-window question, not a two-slot-per-day one.
+function hasOverlap(
+  bookings: ExistingBooking[],
+  propertyId: string,
+  checkInMs: number,
+  checkOutMs: number
+): boolean {
+  return bookings
+    .filter((b) => b.propertyId === propertyId)
+    .filter((b) => b.status !== "CANCELLED" && b.status !== "CHECKED_OUT")
+    .some((b) => {
+      const bIn = parseDateTime(b.checkIn, b.checkInTime);
+      const bOut = parseDateTime(b.checkOut, b.checkOutTime);
+      return (
+        checkInMs < bOut + TURNAROUND_BUFFER_MS &&
+        checkOutMs + TURNAROUND_BUFFER_MS > bIn
+      );
+    });
+}
+
+interface SuggestedSlot {
+  checkInMs: number;
+  checkOutMs: number;
+  isNextDay: boolean;
+}
+
+function findNextAvailableSlot(
+  bookings: ExistingBooking[],
+  propertyId: string,
+  requestedCheckInMs: number,
+  durationMs: number
+): SuggestedSlot | null {
+  const requestedDayStart = new Date(requestedCheckInMs);
+  requestedDayStart.setHours(0, 0, 0, 0);
+
+  // Exclusive upper bound: start of the day AFTER the next day, i.e. the
+  // search covers "today (remaining hours)" + "the next full day".
+  const searchCutoff = new Date(requestedDayStart);
+  searchCutoff.setDate(searchCutoff.getDate() + 2);
+
+  const requestedDayEnd = new Date(requestedDayStart);
+  requestedDayEnd.setDate(requestedDayEnd.getDate() + 1);
+
+  let candidateIn = requestedCheckInMs + SUGGESTION_SEARCH_INCREMENT_MS;
+
+  while (candidateIn < searchCutoff.getTime()) {
+    const candidateOut = candidateIn + durationMs;
+    if (!hasOverlap(bookings, propertyId, candidateIn, candidateOut)) {
+      return {
+        checkInMs: candidateIn,
+        checkOutMs: candidateOut,
+        isNextDay: candidateIn >= requestedDayEnd.getTime(),
+      };
+    }
+    candidateIn += SUGGESTION_SEARCH_INCREMENT_MS;
+  }
+
+  return null;
+}
+
+function formatManilaDateTime(ms: number): { date: string; time: string } {
+  const d = new Date(ms);
+  const date = d.toLocaleDateString("en-PH", {
+    timeZone: "Asia/Manila",
+    month: "long",
+    day: "numeric",
+  });
+  const time = d.toLocaleTimeString("en-PH", {
+    timeZone: "Asia/Manila",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+  return { date, time };
+}
+
 export async function POST(req: NextRequest) {
   try {
     // 1. Verify the request actually came from ManyChat
@@ -335,14 +435,24 @@ export async function POST(req: NextRequest) {
     }
 
     // 4. Pull bookings for these properties that could possibly overlap.
+    //    NOTE: this window is widened below (see checkOutDateOnly cap) to
+    //    also cover the next-day suggestion search — a booking that starts
+    //    the day after checkOutDateOnly could still block a suggested slot.
     const propertyIds = properties.map((p) => p.id);
+
+    const suggestionSearchEnd = new Date(`${checkOutDateOnly}T00:00:00`);
+    suggestionSearchEnd.setDate(suggestionSearchEnd.getDate() + 1);
+    const suggestionSearchEndStr = suggestionSearchEnd
+      .toISOString()
+      .slice(0, 10);
+
     const { data: bookings, error: bookingError } = await supabase
       .from("Booking")
       .select(
         '"id", "propertyId", "checkIn", "checkInTime", "checkOut", "checkOutTime", "stayType", "status"'
       )
       .in("propertyId", propertyIds)
-      .lte("checkIn", checkOutDateOnly)
+      .lte("checkIn", suggestionSearchEndStr)
       .gte("checkOut", checkInDateOnly);
 
     if (bookingError) {
@@ -352,10 +462,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const allBookings = (bookings as ExistingBooking[]) ?? [];
+
     // 5. Run the same slot-conflict logic used on the dashboard for each unit
     const results = properties.map((property) => {
       const conflict = checkConflict(
-        (bookings as ExistingBooking[]) ?? [],
+        allBookings,
         property.id,
         checkInValue,
         checkOutValue,
@@ -392,10 +504,45 @@ export async function POST(req: NextRequest) {
     );
 
     let summary: string;
+    let suggestedCheckIn: string | null = null;
+    let suggestedCheckOut: string | null = null;
 
     if (bookableUnits.length > 0) {
       summary =
         "Yes, we have availability for those dates! Want to book? Just reply and our team will help you finish up!";
+    } else if (stayType === "Custom") {
+      // Flexible-time request with nothing bookable as-asked — search for
+      // the earliest alternate hour (same day, then next day) across all
+      // units, rather than falling straight to a generic "different date"
+      // message.
+      const requestedInMs = parseDateTime(checkInValue, checkInTimeValue);
+      const requestedOutMs = parseDateTime(checkOutValue, checkOutTimeValue);
+      const durationMs = requestedOutMs - requestedInMs;
+
+      let earliest: SuggestedSlot | null = null;
+      for (const property of properties) {
+        const slot = findNextAvailableSlot(
+          allBookings,
+          property.id,
+          requestedInMs,
+          durationMs
+        );
+        if (slot && (!earliest || slot.checkInMs < earliest.checkInMs)) {
+          earliest = slot;
+        }
+      }
+
+      if (earliest) {
+        const { date, time } = formatManilaDateTime(earliest.checkInMs);
+        suggestedCheckIn = new Date(earliest.checkInMs).toISOString();
+        suggestedCheckOut = new Date(earliest.checkOutMs).toISOString();
+        summary = earliest.isNextDay
+          ? `Sorry po, that exact time isn't available. Pero we do have an opening at ${time} on ${date} — want us to book that instead po?`
+          : `Sorry po, that exact time isn't available. Pero we do have an opening at ${time} the same day — want us to book that instead po?`;
+      } else {
+        summary =
+          "Sorry po, we couldn't find an open slot nearby those hours or the next day. Would you like to try a different date instead?";
+      }
     } else if (partialButBlockedUnits.length > 0) {
       const openTypes = Array.from(
         new Set(partialButBlockedUnits.map((r) => r.openStayType))
@@ -415,7 +562,12 @@ export async function POST(req: NextRequest) {
 
     // Still return the raw array too, in case it's useful for anything
     // else later (e.g. a paid-plan flow that branches per unit).
-    return NextResponse.json({ results, summary });
+    return NextResponse.json({
+      results,
+      summary,
+      suggestedCheckIn,
+      suggestedCheckOut,
+    });
   } catch (err) {
     // Catch-all so ManyChat always gets a real JSON error instead of a
     // blank 500 with no body.
