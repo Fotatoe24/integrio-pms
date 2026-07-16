@@ -264,11 +264,31 @@ function checkConflict(
   // A Long request can never be satisfied by a single open slot — it
   // always needs both Day and Night — so requestedTypeAvailable is always
   // false here regardless of which category is open.
+  //
+  // BUG FIX: "different category -> available" is only a safe shortcut
+  // when BOTH sides are fixed stay types. For two fixed types this branch
+  // is actually unreachable in practice — Day ends 8PM+30min buffer=8:30PM,
+  // Night starts 9PM, so a fixed Day and a fixed Night booking never even
+  // appear together in `overlapping` to begin with. It only gets exercised
+  // when a Custom booking is involved — and that's exactly the case where
+  // "different category = non-overlapping" breaks down: a Custom window
+  // (e.g. 5AM-3PM) isn't confined to one canonical window the way fixed
+  // types are, so it can get bucketed as "Day" while still genuinely
+  // overlapping a "Night" booking's actual hours (e.g. sharing 5AM-7AM
+  // with a 9PM-7AM Night stay). This previously reported such cases as
+  // bookable. Now, if Custom is involved on either side, the raw overlap
+  // already detected above is authoritative — no category-based escape.
+  const involvesCustom =
+    newStayType === "Custom" ||
+    (occupied.booking.stayType || "").toLowerCase() === "custom";
+
   return {
     status: "Partial",
     openStayType,
     requestedTypeAvailable:
-      newCategory === "Long" ? false : newCategory !== occupiedCategory,
+      newCategory === "Long" || involvesCustom
+        ? false
+        : newCategory !== occupiedCategory,
   };
 }
 
