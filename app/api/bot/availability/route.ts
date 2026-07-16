@@ -76,9 +76,15 @@ function resolveCategory(
   checkInMs: number,
   checkOutMs: number
 ): StaySlotCategory | "Long" {
-  if (stayType !== "Custom") {
-    if (stayType.includes("Long")) return "Long";
-    if (stayType.includes("Night")) return "Night";
+  // Lowercased/underscore-tolerant check — existing Booking rows may have
+  // been saved with ManyChat's raw field values ("Day_long") rather than
+  // the canonical "Day (Long) 2PM-11AM" string, and a case-sensitive
+  // .includes("Long") would silently miss those, mis-classifying a real
+  // Long booking as a plain "Day" one.
+  const normalized = stayType.toLowerCase();
+  if (normalized !== "custom") {
+    if (normalized.includes("long")) return "Long";
+    if (normalized.includes("night")) return "Night";
     return "Day";
   }
 
@@ -207,7 +213,10 @@ function checkConflict(
       resolveCategory(booking.stayType || "", bIn, bOut) === "Long"
   );
 
-  if (newCategory === "Long" || existingHasLong) {
+  // An existing Long booking occupies both slots outright, and two
+  // separate overlapping bookings means both Day and Night are taken —
+  // either way there's genuinely nothing open on this unit.
+  if (existingHasLong || overlapping.length >= 2) {
     return {
       status: "Fully Booked",
       openStayType: null,
@@ -215,17 +224,12 @@ function checkConflict(
     };
   }
 
-  if (overlapping.length >= 2) {
-    return {
-      status: "Fully Booked",
-      openStayType: null,
-      requestedTypeAvailable: false,
-    };
-  }
-
-  // Exactly one short-stay booking overlaps (within the buffer) and it
-  // isn't Long -> Partial. Figure out which category is occupied so we can
-  // tell the guest which one is still open.
+  // Exactly one non-Long booking overlaps -> one slot is occupied, one is
+  // open. This used to short-circuit a Long request straight to "Fully
+  // Booked" without ever computing which slot was free — now it falls
+  // through to the same Partial branch as everything else, so a Long
+  // request that can't fit (it always needs both slots) still surfaces
+  // the genuinely-open slot as a downgrade option instead of a flat "no."
   const occupied = overlapping[0];
   const occupiedCategory = resolveCategory(
     occupied.booking.stayType || "",
@@ -235,10 +239,14 @@ function checkConflict(
   const openStayType: StaySlotCategory =
     occupiedCategory === "Day" ? "Night" : "Day";
 
+  // A Long request can never be satisfied by a single open slot — it
+  // always needs both Day and Night — so requestedTypeAvailable is always
+  // false here regardless of which category is open.
   return {
     status: "Partial",
     openStayType,
-    requestedTypeAvailable: newCategory !== occupiedCategory,
+    requestedTypeAvailable:
+      newCategory === "Long" ? false : newCategory !== occupiedCategory,
   };
 }
 
@@ -341,6 +349,35 @@ function formatManilaDateTime(ms: number): { date: string; time: string } {
   });
   return { date, time };
 }
+
+// "the 18th" style — used in the Day(Long)-downgrade message. Day-of-month
+// is pulled via the Manila timezone so it matches what the guest actually
+// typed, not whatever local date the server happens to be on.
+function ordinalDay(ms: number): string {
+  const day = Number(
+    new Date(ms).toLocaleDateString("en-US", {
+      timeZone: "Asia/Manila",
+      day: "numeric",
+    })
+  );
+  const suffix =
+    day % 10 === 1 && day !== 11
+      ? "st"
+      : day % 10 === 2 && day !== 12
+      ? "nd"
+      : day % 10 === 3 && day !== 13
+      ? "rd"
+      : "th";
+  return `${day}${suffix}`;
+}
+
+// Guest-facing time range per slot category, for the Day(Long)-downgrade
+// message ("...pero Night 9PM-7AM lang is open..."). Keep in sync with
+// RATE_TIMES above if the rate card windows ever change.
+const CATEGORY_TIME_LABEL: Record<StaySlotCategory, string> = {
+  Day: "8AM-8PM",
+  Night: "9PM-7AM",
+};
 
 export async function POST(req: NextRequest) {
   try {
@@ -542,11 +579,29 @@ export async function POST(req: NextRequest) {
       (r) => r.status === "Partial" && !r.requestedTypeAvailable
     );
 
+    // Single machine-readable field for ManyChat's Condition block to
+    // switch on, instead of parsing the guest-facing `summary` text:
+    //  - BOOKABLE                -> proceed straight to booking confirmation
+    //  - PARTIAL_ALTERNATIVE     -> same date works, guest needs to switch
+    //                               Day/Night type
+    //  - SUGGESTED_ALTERNATIVE_TIME -> Custom flow found a nearby hour or
+    //                               next-day opening (see suggestedCheckIn)
+    //  - FULLY_BOOKED            -> genuinely nothing available near this
+    //                               date -> loop back to the date-picking
+    //                               step, don't proceed to booking
+    type AvailabilityFlag =
+      | "BOOKABLE"
+      | "PARTIAL_ALTERNATIVE"
+      | "SUGGESTED_ALTERNATIVE_TIME"
+      | "FULLY_BOOKED";
+
     let summary: string;
+    let flag: AvailabilityFlag;
     let suggestedCheckIn: string | null = null;
     let suggestedCheckOut: string | null = null;
 
     if (bookableUnits.length > 0) {
+      flag = "BOOKABLE";
       summary =
         "Yes, we have availability for those dates! Want to book? Just reply and our team will help you finish up!";
     } else if (normalizedStayType === "Custom") {
@@ -575,26 +630,61 @@ export async function POST(req: NextRequest) {
         const { date, time } = formatManilaDateTime(earliest.checkInMs);
         suggestedCheckIn = new Date(earliest.checkInMs).toISOString();
         suggestedCheckOut = new Date(earliest.checkOutMs).toISOString();
+        flag = "SUGGESTED_ALTERNATIVE_TIME";
         summary = earliest.isNextDay
           ? `Sorry po, that exact time isn't available. Pero we do have an opening at ${time} on ${date} — want us to book that instead po?`
           : `Sorry po, that exact time isn't available. Pero we do have an opening at ${time} the same day — want us to book that instead po?`;
       } else {
+        // No same-day or next-day slot found at all -> truly nothing
+        // bookable near this date, same as the fixed-type fully-booked
+        // case below.
+        flag = "FULLY_BOOKED";
         summary =
           "Sorry po, we couldn't find an open slot nearby those hours or the next day. Would you like to try a different date instead?";
       }
     } else if (partialButBlockedUnits.length > 0) {
+      flag = "PARTIAL_ALTERNATIVE";
       const openTypes = Array.from(
         new Set(partialButBlockedUnits.map((r) => r.openStayType))
       );
-      const openTypesText = openTypes.join(" or ");
-      // Use the resolved Day/Night category, not the raw stayType — every
-      // entry here has requestedTypeAvailable === false, meaning the
-      // guest's request landed in whichever category ISN'T open, i.e. the
-      // opposite of openStayType. This also avoids ever showing "Custom"
-      // (an internal enum value) in a guest-facing message.
-      const requestedTypeText = openTypes[0] === "Day" ? "Night" : "Day";
-      summary = `Sorry po, ${requestedTypeText} is already booked for those dates. We do have a ${openTypesText} slot open po — want us to check that instead?`;
+
+      // A Long request (Day Long, or a Custom window that spans both
+      // windows) always lands in this branch with requestedTypeAvailable
+      // === false, since half a day can never satisfy it — but the
+      // guest-facing message needs to say "we can't do the full Day+Night"
+      // rather than the generic Day/Night-switch phrasing below.
+      const requestedInMs = parseDateTime(checkInValue, checkInTimeValue);
+      const requestedOutMs = parseDateTime(checkOutValue, checkOutTimeValue);
+      const requestedCategory = resolveCategory(
+        normalizedStayType,
+        requestedInMs,
+        requestedOutMs
+      );
+
+      const firstOpenType = openTypes[0];
+      if (
+        requestedCategory === "Long" &&
+        openTypes.length === 1 &&
+        firstOpenType
+      ) {
+        summary = `Sorry po, we can't do the full Day+Night on the ${ordinalDay(
+          requestedInMs
+        )}, pero ${firstOpenType} ${
+          CATEGORY_TIME_LABEL[firstOpenType]
+        } lang is open — want that instead?`;
+      } else {
+        const openTypesText = openTypes.join(" or ");
+        // Use the resolved Day/Night category, not the raw stayType —
+        // every entry here has requestedTypeAvailable === false, meaning
+        // the guest's request landed in whichever category ISN'T open,
+        // i.e. the opposite of openStayType. This also avoids ever
+        // showing "Custom" (an internal enum value) in a guest-facing
+        // message.
+        const requestedTypeText = openTypes[0] === "Day" ? "Night" : "Day";
+        summary = `Sorry po, ${requestedTypeText} is already booked for those dates. We do have a ${openTypesText} slot open po — want us to check that instead?`;
+      }
     } else {
+      flag = "FULLY_BOOKED";
       summary =
         "Sorry, we're fully booked for those dates. Would you like to try different dates?";
     }
@@ -604,6 +694,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       results,
       summary,
+      flag,
+      bookable: flag === "BOOKABLE",
       suggestedCheckIn,
       suggestedCheckOut,
     });
