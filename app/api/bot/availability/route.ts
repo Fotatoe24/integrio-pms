@@ -563,9 +563,22 @@ export async function POST(req: NextRequest) {
     }
 
     // 4. Pull bookings for these properties that could possibly overlap.
-    //    NOTE: this window is widened below (see checkOutDateOnly cap) to
-    //    also cover the next-day suggestion search — a booking that starts
-    //    the day after checkOutDateOnly could still block a suggested slot.
+    //    NOTE: this window is widened on BOTH ends beyond the raw
+    //    checkIn/checkOut dates:
+    //     - upper bound (+1 day) covers the next-day suggestion search —
+    //       a booking that starts the day after checkOutDateOnly could
+    //       still block a suggested slot.
+    //     - lower bound (-1 day) covers overnight bookings whose checkOut
+    //       is stored as a UTC timestamp on the PREVIOUS calendar day even
+    //       though it's the correct Manila time — e.g. a Night booking
+    //       checking out 7:00 AM Manila on the 19th is stored as
+    //       "...-18 23:00:00+00" (still July 18 in UTC). A bare
+    //       .gte("checkOut", "2026-07-19") would silently exclude that row
+    //       from this query before checkConflict ever runs, making a
+    //       genuinely conflicting unit look bookable simply because the
+    //       conflicting booking was never fetched. Over-fetching here is
+    //       harmless — the in-memory overlap check in checkConflict/
+    //       hasOverlap does the real, correct filtering either way.
     const propertyIds = properties.map((p) => p.id);
 
     const suggestionSearchEnd = new Date(`${checkOutDateOnly}T00:00:00`);
@@ -574,6 +587,10 @@ export async function POST(req: NextRequest) {
       .toISOString()
       .slice(0, 10);
 
+    const queryLowerBound = new Date(`${checkInDateOnly}T00:00:00`);
+    queryLowerBound.setDate(queryLowerBound.getDate() - 1);
+    const queryLowerBoundStr = queryLowerBound.toISOString().slice(0, 10);
+
     const { data: bookings, error: bookingError } = await supabase
       .from("Booking")
       .select(
@@ -581,7 +598,7 @@ export async function POST(req: NextRequest) {
       )
       .in("propertyId", propertyIds)
       .lte("checkIn", suggestionSearchEndStr)
-      .gte("checkOut", checkInDateOnly);
+      .gte("checkOut", queryLowerBoundStr);
 
     if (bookingError) {
       return NextResponse.json(
