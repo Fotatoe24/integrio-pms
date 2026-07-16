@@ -677,7 +677,7 @@ export async function POST(req: NextRequest) {
     if (bookableUnits.length > 0) {
       flag = "BOOKABLE";
       summary =
-        "Yes, we have availability for those dates! Want to book? Just reply and our team will help you finish up!";
+        "Great news po, your preferred dates and times are available! Would you like to proceed with booking?";
     } else if (normalizedStayType === "Custom") {
       // Flexible-time request with nothing bookable as-asked — search for
       // the earliest alternate hour (same day, then next day) across all
@@ -764,7 +764,7 @@ export async function POST(req: NextRequest) {
         // showing "Custom" (an internal enum value) in a guest-facing
         // message.
         const requestedTypeText = openTypes[0] === "Day" ? "Night" : "Day";
-        summary = `Sorry po, ${requestedTypeText} is already booked for those dates. We do have a ${openTypesText} slot open po — want us to check that instead?`;
+        summary = `Sorry po, ${requestedTypeText} is already booked for those dates. Meron pong ${openTypesText} slot open po — want us to check that instead?`;
       }
     } else {
       flag = "FULLY_BOOKED";

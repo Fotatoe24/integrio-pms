@@ -148,6 +148,30 @@ export default function BookingsPage() {
     loadData();
   }, []);
 
+  useEffect(() => {
+    const channel = supabase
+      .channel("booking-realtime")
+      .on(
+        "postgres_changes",
+        {
+          event: "*", // INSERT, UPDATE, DELETE
+          schema: "public",
+          table: "Booking",
+        },
+        (payload) => {
+          console.log("Booking changed:", payload);
+
+          // simplest solution
+          loadData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
   async function loadData() {
     setLoading(true);
     const user = getCurrentUser();
