@@ -115,7 +115,9 @@ function resolveCategory(
 // Ported from app/dashboard/bookings/page.tsx — keep these two in sync
 // if the slot logic ever changes on the dashboard.
 //
-// Accepts either:
+// USE ONLY FOR THE INCOMING GUEST REQUEST (checkInValue/checkOutValue +
+// checkInTimeValue/checkOutTimeValue built earlier in POST), never for
+// rows already pulled from the Booking table. Accepts either:
 //  - a plain date string ("2026-07-10") + a 12hr rate time ("8:00 AM"), or
 //  - a full ISO datetime string ("2026-07-10T20:00:00") as dateStr with
 //    timeStr passed as null (time is already embedded in dateStr).
@@ -135,6 +137,25 @@ function parseDateTime(dateStr: string, timeStr: string | null): number {
 
   date.setHours(hours, minutes, 0, 0);
   return date.getTime();
+}
+
+// USE FOR EXISTING BOOKING ROWS PULLED FROM THE DATABASE.
+//
+// Booking.checkIn/checkOut are stored as full timestamptz values that
+// already carry the correct absolute instant (confirmed against real
+// data: e.g. checkIn "2026-07-18 13:00:00+00" IS 9:00 PM Manila on
+// Jul 18 — the UTC offset is already baked in). checkInTime/checkOutTime
+// are redundant display-only text copies of the same info in 12hr
+// format ("9:00 PM").
+//
+// parseDateTime() must NEVER be used on these rows: calling
+// .setHours(21, ...) on an already-correct instant re-applies "21" in
+// the SERVER's local timezone (UTC on Vercel), not Manila — silently
+// shifting the real instant by up to 8 hours and making genuinely
+// overlapping bookings look non-overlapping (or vice versa). This
+// previously let a real double-booking through undetected.
+function parseExistingBookingTime(dateStr: string): number {
+  return new Date(dateStr).getTime();
 }
 
 interface ExistingBooking {
@@ -182,14 +203,15 @@ function checkConflict(
 
   // Compute each existing booking's actual time window once, up front —
   // resolveCategory needs it for "Custom" bookings, not just the overlap
-  // check.
+  // check. These rows come straight from the DB and already carry the
+  // correct instant — parseExistingBookingTime(), NOT parseDateTime().
   const withTimes = bookings
     .filter((b) => b.propertyId === propertyId)
     .filter((b) => b.status !== "CANCELLED" && b.status !== "CHECKED_OUT")
     .map((b) => ({
       booking: b,
-      bIn: parseDateTime(b.checkIn, b.checkInTime),
-      bOut: parseDateTime(b.checkOut, b.checkOutTime),
+      bIn: parseExistingBookingTime(b.checkIn),
+      bOut: parseExistingBookingTime(b.checkOut),
     }));
 
   // Overlap check with the turnaround buffer added to BOTH sides' checkout
@@ -285,8 +307,8 @@ function hasOverlap(
     .filter((b) => b.propertyId === propertyId)
     .filter((b) => b.status !== "CANCELLED" && b.status !== "CHECKED_OUT")
     .some((b) => {
-      const bIn = parseDateTime(b.checkIn, b.checkInTime);
-      const bOut = parseDateTime(b.checkOut, b.checkOutTime);
+      const bIn = parseExistingBookingTime(b.checkIn);
+      const bOut = parseExistingBookingTime(b.checkOut);
       return (
         checkInMs < bOut + TURNAROUND_BUFFER_MS &&
         checkOutMs + TURNAROUND_BUFFER_MS > bIn
