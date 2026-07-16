@@ -107,35 +107,35 @@ const BOOKINGS_PER_PAGE = 8;
 const PAYMENTS_PER_PAGE = 8;
 
 const ROLE_COLORS: Record<string, { bg: string; color: string }> = {
-  booker: { bg: "#d1ecf1", color: "#0c5460" },
-  auditor: { bg: "#fff3cd", color: "#856404" },
-  housekeeping: { bg: "#d4edda", color: "#155724" },
-  owner: { bg: "#e8d5f5", color: "#5a2d82" },
-  ADMIN: { bg: "#e8d5f5", color: "#5a2d82" },
-  STAFF: { bg: "#d1ecf1", color: "#0c5460" },
+  booker: { bg: "rgba(24,119,242,.14)", color: "#1877F2" },
+  auditor: { bg: "rgba(200,125,0,.15)", color: "var(--amber)" },
+  housekeeping: { bg: "rgba(0,138,5,.13)", color: "var(--green)" },
+  owner: { bg: "rgba(108,92,231,.16)", color: "var(--violet)" },
+  ADMIN: { bg: "rgba(108,92,231,.16)", color: "var(--violet)" },
+  STAFF: { bg: "rgba(24,119,242,.14)", color: "#1877F2" },
 };
 
 const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
-  active: { bg: "#d4edda", color: "#155724" },
-  invited: { bg: "#fff3cd", color: "#856404" },
-  revoked: { bg: "#f8d7da", color: "#721c24" },
-  PENDING: { bg: "#fff3cd", color: "#856404" },
-  CONFIRMED: { bg: "#d1ecf1", color: "#0c5460" },
-  CHECKED_IN: { bg: "#d4edda", color: "#155724" },
-  CHECKED_OUT: { bg: "#e2e3e5", color: "#383d41" },
-  CANCELLED: { bg: "#f8d7da", color: "#721c24" },
-  PAID: { bg: "#d4edda", color: "#155724" },
-  PARTIAL: { bg: "#fff3cd", color: "#856404" },
-  REFUNDED: { bg: "#f8d7da", color: "#721c24" },
+  active: { bg: "rgba(0,138,5,.13)", color: "var(--green)" },
+  invited: { bg: "rgba(200,125,0,.15)", color: "var(--amber)" },
+  revoked: { bg: "rgba(255,56,92,.14)", color: "var(--rausch)" },
+  PENDING: { bg: "rgba(200,125,0,.15)", color: "var(--amber)" },
+  CONFIRMED: { bg: "rgba(108,92,231,.16)", color: "var(--violet)" },
+  CHECKED_IN: { bg: "rgba(0,138,5,.13)", color: "var(--green)" },
+  CHECKED_OUT: { bg: "var(--bg-2)", color: "var(--gray)" },
+  CANCELLED: { bg: "rgba(255,56,92,.14)", color: "var(--rausch)" },
+  PAID: { bg: "rgba(0,138,5,.13)", color: "var(--green)" },
+  PARTIAL: { bg: "rgba(200,125,0,.15)", color: "var(--amber)" },
+  REFUNDED: { bg: "rgba(255,56,92,.14)", color: "var(--rausch)" },
 };
 
 const CATEGORY_COLORS: Record<string, { bg: string; color: string }> = {
-  general: { bg: "#e2e3e5", color: "#383d41" },
-  cleaning: { bg: "#d1ecf1", color: "#0c5460" },
-  supplies: { bg: "#fff3cd", color: "#856404" },
-  maintenance: { bg: "#f8d7da", color: "#721c24" },
-  laundry: { bg: "#d4edda", color: "#155724" },
-  other: { bg: "#e8d5f5", color: "#5a2d82" },
+  general: { bg: "var(--bg-2)", color: "var(--gray)" },
+  cleaning: { bg: "rgba(24,119,242,.14)", color: "#1877F2" },
+  supplies: { bg: "rgba(200,125,0,.15)", color: "var(--amber)" },
+  maintenance: { bg: "rgba(255,56,92,.14)", color: "var(--rausch)" },
+  laundry: { bg: "rgba(0,138,5,.13)", color: "var(--green)" },
+  other: { bg: "rgba(108,92,231,.16)", color: "var(--violet)" },
 };
 
 const FLAG_META: Record<RedFlag["type"], { icon: string; label: string }> = {
@@ -326,6 +326,7 @@ export default function OwnerPage() {
   const [user, setUser] = useState<IntegrioUser | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("Overview");
   const [loading, setLoading] = useState(true);
+  const [theme, setTheme] = useState<"light" | "dark">("light");
 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [expenseNotes, setExpenseNotes] = useState<ExpenseNote[]>([]);
@@ -380,6 +381,11 @@ export default function OwnerPage() {
 
   useEffect(() => {
     document.title = "Owner — Integrio";
+    const stored = (typeof window !== "undefined" &&
+      localStorage.getItem("integrio_theme")) as "light" | "dark" | null;
+    const initialTheme = stored || "light";
+    setTheme(initialTheme);
+    document.documentElement.setAttribute("data-theme", initialTheme);
     const u = requireRole(["owner", "ADMIN"], router);
     if (u) {
       setUser(u);
@@ -388,6 +394,13 @@ export default function OwnerPage() {
       loadChecklists(u);
     }
   }, []);
+
+  function toggleTheme() {
+    const next = theme === "light" ? "dark" : "light";
+    setTheme(next);
+    document.documentElement.setAttribute("data-theme", next);
+    localStorage.setItem("integrio_theme", next);
+  }
 
   async function loadAll(u: IntegrioUser) {
     setLoading(true);
@@ -811,8 +824,8 @@ export default function OwnerPage() {
   const inputStyle: React.CSSProperties = {
     width: "100%",
     padding: "11px 14px",
-    border: "1.5px solid var(--brand-border)",
-    borderRadius: 10,
+    border: "1px solid var(--brand-border)",
+    borderRadius: 12,
     fontSize: 14,
     color: "var(--brand-text)",
     outline: "none",
@@ -828,24 +841,23 @@ export default function OwnerPage() {
 
   const labelStyle: React.CSSProperties = {
     display: "block",
-    fontSize: 12,
-    fontWeight: 600,
-    color: "var(--brand-text-muted)",
-    textTransform: "uppercase",
-    letterSpacing: "0.06em",
-    marginBottom: 8,
+    fontSize: 13,
+    fontWeight: 700,
+    color: "var(--brand-text)",
+    marginBottom: 7,
   };
 
   const paginationBtnStyle = (disabled: boolean): React.CSSProperties => ({
     padding: "8px 16px",
-    borderRadius: 8,
+    borderRadius: 12,
     fontSize: 13,
-    fontWeight: 600,
-    border: "1.5px solid var(--brand-border)",
+    fontWeight: 700,
+    border: "1px solid var(--brand-border)",
     background: "var(--brand-surface)",
     color: disabled ? "var(--brand-text-muted)" : "var(--brand-text)",
     cursor: disabled ? "not-allowed" : "pointer",
     opacity: disabled ? 0.5 : 1,
+    transition: ".15s",
   });
 
   const dangerFlags = flags.filter((f) => f.severity === "danger").length;
@@ -858,13 +870,17 @@ export default function OwnerPage() {
       style={{
         minHeight: "100vh",
         background: "var(--brand-bg)",
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        fontFamily:
+          '"Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        color: "var(--brand-text)",
+        transition: "background-color .2s, color .2s",
       }}
     >
       {/* Header */}
       <div
         style={{
-          background: "var(--brand-surface)",
+          background: "var(--nav-bg)",
+          backdropFilter: "saturate(180%) blur(10px)",
           borderBottom: "1px solid var(--brand-border)",
           padding: "0 32px",
           height: 64,
@@ -893,11 +909,11 @@ export default function OwnerPage() {
           <span
             style={{
               fontSize: 12,
-              fontWeight: 600,
+              fontWeight: 700,
               background: "var(--brand-surface)",
               color: "var(--brand-text-muted)",
               border: "1px solid var(--brand-border)",
-              borderRadius: 20,
+              borderRadius: 999,
               padding: "3px 10px",
             }}
           >
@@ -912,11 +928,14 @@ export default function OwnerPage() {
                 alignItems: "center",
                 gap: 6,
                 fontSize: 12,
-                fontWeight: 700,
-                background: dangerFlags > 0 ? "#f8d7da" : "#fff3cd",
-                color: dangerFlags > 0 ? "#721c24" : "#856404",
+                fontWeight: 800,
+                background:
+                  dangerFlags > 0
+                    ? "rgba(255,56,92,.14)"
+                    : "rgba(200,125,0,.15)",
+                color: dangerFlags > 0 ? "var(--rausch)" : "var(--amber)",
                 border: "none",
-                borderRadius: 20,
+                borderRadius: 999,
                 padding: "4px 12px",
                 cursor: "pointer",
               }}
@@ -926,19 +945,72 @@ export default function OwnerPage() {
           )}
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <span style={{ fontSize: 13, color: "var(--brand-text)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span
+            style={{
+              fontSize: 13,
+              color: "var(--brand-text)",
+              marginRight: 4,
+            }}
+          >
             {user.name}
           </span>
+
+          <button
+            onClick={toggleTheme}
+            aria-label="Toggle day or dark view"
+            title="Toggle day / dark view"
+            style={{
+              width: 38,
+              height: 38,
+              border: "1px solid var(--brand-border)",
+              borderRadius: "50%",
+              background: "var(--brand-surface)",
+              color: "var(--brand-text)",
+              cursor: "pointer",
+              display: "grid",
+              placeItems: "center",
+            }}
+          >
+            {theme === "dark" ? (
+              <svg
+                width="17"
+                height="17"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="12" cy="12" r="4" />
+                <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+              </svg>
+            ) : (
+              <svg
+                width="17"
+                height="17"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" />
+              </svg>
+            )}
+          </button>
 
           <a
             href="/settings"
             style={{
               fontSize: 13,
+              fontWeight: 600,
               color: "var(--brand-text)",
-              border: "1.5px solid var(--brand-border)",
-              borderRadius: 8,
-              padding: "6px 14px",
+              border: "1px solid var(--brand-border)",
+              borderRadius: 12,
+              padding: "8px 16px",
               textDecoration: "none",
             }}
           >
@@ -948,11 +1020,12 @@ export default function OwnerPage() {
             onClick={logout}
             style={{
               fontSize: 13,
+              fontWeight: 600,
               color: "var(--brand-text-muted)",
               background: "none",
-              border: "1.5px solid var(--brand-border)",
-              borderRadius: 8,
-              padding: "6px 14px",
+              border: "1px solid var(--brand-border)",
+              borderRadius: 12,
+              padding: "8px 16px",
               cursor: "pointer",
             }}
           >
@@ -962,7 +1035,7 @@ export default function OwnerPage() {
       </div>
 
       <div
-        style={{ maxWidth: 1040, margin: "0 auto", padding: "32px 24px 80px" }}
+        style={{ maxWidth: 1120, margin: "0 auto", padding: "32px 24px 80px" }}
       >
         {/* Title row */}
         <div
@@ -970,7 +1043,7 @@ export default function OwnerPage() {
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            marginBottom: 28,
+            marginBottom: 24,
             flexWrap: "wrap",
             gap: 16,
           }}
@@ -978,15 +1051,16 @@ export default function OwnerPage() {
           <div>
             <h1
               style={{
-                fontSize: 24,
-                fontWeight: 700,
+                fontSize: 28,
+                fontWeight: 800,
+                letterSpacing: "-.02em",
                 color: "var(--brand-text)",
                 marginBottom: 4,
               }}
             >
               Owner Dashboard
             </h1>
-            <p style={{ color: "var(--brand-text-muted)", fontSize: 14 }}>
+            <p style={{ color: "var(--brand-text-muted)", fontSize: 15 }}>
               Full visibility across all operations
             </p>
           </div>
@@ -1011,7 +1085,7 @@ export default function OwnerPage() {
                 <span
                   style={{
                     fontSize: 13,
-                    fontWeight: 600,
+                    fontWeight: 700,
                     color: "var(--brand-text)",
                     minWidth: 130,
                     textAlign: "center",
@@ -1030,8 +1104,8 @@ export default function OwnerPage() {
               <div
                 style={{
                   display: "flex",
-                  border: "1.5px solid var(--brand-border)",
-                  borderRadius: 10,
+                  border: "1px solid var(--brand-border)",
+                  borderRadius: 12,
                   overflow: "hidden",
                 }}
               >
@@ -1045,7 +1119,7 @@ export default function OwnerPage() {
                     style={{
                       padding: "8px 16px",
                       fontSize: 13,
-                      fontWeight: 600,
+                      fontWeight: 700,
                       border: "none",
                       cursor: "pointer",
                       background:
@@ -1077,18 +1151,17 @@ export default function OwnerPage() {
                 setInviteSuccess("");
               }}
               style={{
-                background: "linear-gradient(135deg, #1a2744, #2cb5b0)",
+                background: "var(--rausch)",
+                border: "1px solid var(--rausch)",
                 color: "white",
-                border: "none",
-                borderRadius: 10,
-                padding: "10px 20px",
+                borderRadius: 12,
+                padding: "11px 20px",
                 fontSize: 14,
-                fontWeight: 600,
+                fontWeight: 700,
                 cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
                 gap: 8,
-                boxShadow: "0 4px 16px rgba(44,181,176,0.3)",
               }}
             >
               <span style={{ fontSize: 18 }}>+</span> Invite Employee
@@ -1124,7 +1197,7 @@ export default function OwnerPage() {
                     style={{
                       background: "var(--brand-surface)",
                       border: "1px solid var(--brand-border)",
-                      borderRadius: 16,
+                      borderRadius: 20,
                       padding: "28px 28px",
                       display: "flex",
                       alignItems: "flex-start",
@@ -1136,11 +1209,9 @@ export default function OwnerPage() {
                     <div>
                       <div
                         style={{
-                          fontSize: 11,
-                          fontWeight: 600,
+                          fontSize: 12.5,
+                          fontWeight: 700,
                           color: "var(--brand-text-muted)",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.06em",
                           marginBottom: 12,
                         }}
                       >
@@ -1149,7 +1220,8 @@ export default function OwnerPage() {
                       <div
                         style={{
                           fontSize: 36,
-                          fontWeight: 700,
+                          fontWeight: 800,
+                          letterSpacing: "-.02em",
                           color: "var(--brand-text)",
                           marginBottom: 6,
                           lineHeight: 1.1,
@@ -1186,11 +1258,9 @@ export default function OwnerPage() {
                         <div key={item.label} style={{ textAlign: "right" }}>
                           <div
                             style={{
-                              fontSize: 11,
-                              fontWeight: 600,
+                              fontSize: 12.5,
+                              fontWeight: 700,
                               color: "var(--brand-text-muted)",
-                              textTransform: "uppercase",
-                              letterSpacing: "0.06em",
                               marginBottom: 8,
                             }}
                           >
@@ -1199,7 +1269,7 @@ export default function OwnerPage() {
                           <div
                             style={{
                               fontSize: 17,
-                              fontWeight: 700,
+                              fontWeight: 800,
                               color: "var(--brand-text)",
                             }}
                           >
@@ -1248,7 +1318,7 @@ export default function OwnerPage() {
                         style={{
                           background: "var(--brand-surface)",
                           border: "1px solid var(--brand-border)",
-                          borderRadius: 16,
+                          borderRadius: 18,
                           padding: "18px 20px",
                           display: "flex",
                           alignItems: "center",
@@ -1260,7 +1330,7 @@ export default function OwnerPage() {
                           <div
                             style={{
                               fontSize: 22,
-                              fontWeight: 700,
+                              fontWeight: 800,
                               color: "var(--brand-text)",
                               lineHeight: 1.1,
                             }}
@@ -1269,8 +1339,9 @@ export default function OwnerPage() {
                           </div>
                           <div
                             style={{
-                              fontSize: 12,
+                              fontSize: 12.5,
                               color: "var(--brand-text-muted)",
+                              fontWeight: 600,
                             }}
                           >
                             {s.label}
@@ -1285,8 +1356,8 @@ export default function OwnerPage() {
                 <div
                   style={{
                     background: "var(--brand-surface)",
-                    borderRadius: 16,
-                    boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+                    borderRadius: 20,
+                    boxShadow: "var(--shadow-s)",
                     border: "1px solid var(--brand-border)",
                     padding: "22px 24px",
                   }}
@@ -1301,15 +1372,19 @@ export default function OwnerPage() {
                   >
                     <div
                       style={{
-                        fontSize: 14,
-                        fontWeight: 700,
+                        fontSize: 15,
+                        fontWeight: 800,
                         color: "var(--brand-text)",
                       }}
                     >
                       🏆 Commission leaderboard
                     </div>
                     <span
-                      style={{ fontSize: 11, color: "var(--brand-text-muted)" }}
+                      style={{
+                        fontSize: 11,
+                        color: "var(--brand-text-muted)",
+                        fontWeight: 600,
+                      }}
                     >
                       ₱{COMMISSION_PER_BOOKING} per booking handled
                     </span>
@@ -1344,10 +1419,8 @@ export default function OwnerPage() {
                           alignItems: "center",
                           justifyContent: "space-between",
                           padding: "12px 0",
-                          borderBottom:
-                            i === leaderboard.length - 1
-                              ? "none"
-                              : "1px solid var(--background)",
+                          borderTop:
+                            i === 0 ? "none" : "1px solid var(--brand-border)",
                         }}
                       >
                         <div
@@ -1362,7 +1435,7 @@ export default function OwnerPage() {
                               width: 28,
                               textAlign: "center",
                               fontSize: 15,
-                              fontWeight: 700,
+                              fontWeight: 800,
                               color: "var(--brand-text-muted)",
                             }}
                           >
@@ -1378,9 +1451,9 @@ export default function OwnerPage() {
                             style={{
                               width: 36,
                               height: 36,
-                              borderRadius: 10,
+                              borderRadius: "50%",
                               background:
-                                "linear-gradient(135deg, #1a2744, #2cb5b0)",
+                                "linear-gradient(135deg, var(--rausch), #C13584)",
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
@@ -1395,8 +1468,8 @@ export default function OwnerPage() {
                           <div>
                             <div
                               style={{
-                                fontSize: 13,
-                                fontWeight: 600,
+                                fontSize: 13.5,
+                                fontWeight: 700,
                                 color: "var(--brand-text)",
                                 display: "flex",
                                 alignItems: "center",
@@ -1407,9 +1480,9 @@ export default function OwnerPage() {
                               <span
                                 style={{
                                   padding: "1px 8px",
-                                  borderRadius: 20,
+                                  borderRadius: 999,
                                   fontSize: 10,
-                                  fontWeight: 600,
+                                  fontWeight: 700,
                                   background:
                                     ROLE_COLORS[entry.person.role]?.bg,
                                   color: ROLE_COLORS[entry.person.role]?.color,
@@ -1422,6 +1495,7 @@ export default function OwnerPage() {
                               style={{
                                 fontSize: 11,
                                 color: "var(--brand-text-muted)",
+                                fontWeight: 600,
                               }}
                             >
                               {entry.bookingsCount} booking
@@ -1433,7 +1507,7 @@ export default function OwnerPage() {
                         <div
                           style={{
                             fontSize: 15,
-                            fontWeight: 700,
+                            fontWeight: 800,
                             color: "var(--brand-text)",
                             whiteSpace: "nowrap",
                           }}
@@ -1462,24 +1536,19 @@ export default function OwnerPage() {
                   key={tab}
                   onClick={() => setActiveTab(tab)}
                   style={{
-                    padding: "6px 18px",
-                    borderRadius: 20,
-                    fontSize: 13,
+                    padding: "8px 16px",
+                    borderRadius: 10,
+                    fontSize: 13.5,
                     fontWeight: 600,
-                    border:
-                      activeTab === tab
-                        ? "none"
-                        : "1.5px solid var(--brand-border)",
+                    border: "none",
                     background:
-                      activeTab === tab
-                        ? "var(--brand-text)"
-                        : "var(--brand-surface)",
+                      activeTab === tab ? "rgba(255,56,92,.12)" : "transparent",
                     color:
                       activeTab === tab
-                        ? "var(--background)"
+                        ? "var(--rausch)"
                         : "var(--brand-text-muted)",
                     cursor: "pointer",
-                    transition: "all 0.2s",
+                    transition: "background .15s, color .15s",
                     display: "flex",
                     alignItems: "center",
                     gap: 6,
@@ -1490,10 +1559,9 @@ export default function OwnerPage() {
                     <span
                       style={{
                         background:
-                          activeTab === tab ? "var(--brand-bg)" : "#e74c3c",
-                        color:
-                          activeTab === tab ? "var(--brand-text)" : "white",
-                        borderRadius: 20,
+                          activeTab === tab ? "var(--rausch)" : "var(--rausch)",
+                        color: "white",
+                        borderRadius: 999,
                         fontSize: 10,
                         fontWeight: 700,
                         padding: "1px 6px",
@@ -1527,10 +1595,10 @@ export default function OwnerPage() {
                   <div
                     style={{
                       background: "var(--brand-surface)",
-                      borderRadius: 16,
+                      borderRadius: 20,
                       padding: 60,
                       textAlign: "center",
-                      boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+                      boxShadow: "var(--shadow-s)",
                       border: "1px solid var(--brand-border)",
                     }}
                   >
@@ -1566,15 +1634,16 @@ export default function OwnerPage() {
                         key={i}
                         style={{
                           background: "var(--brand-surface)",
-                          borderRadius: 14,
-                          boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+                          borderRadius: 16,
                           border: "1px solid var(--brand-border)",
                           padding: "16px 20px",
                           display: "flex",
                           alignItems: "center",
                           gap: 14,
-                          borderLeft: `4px solid ${
-                            f.severity === "danger" ? "#e74c3c" : "#f0ad4e"
+                          boxShadow: `var(--shadow-s), inset 3px 0 0 ${
+                            f.severity === "danger"
+                              ? "var(--rausch)"
+                              : "var(--amber)"
                           }`,
                         }}
                       >
@@ -1589,7 +1658,9 @@ export default function OwnerPage() {
                               textTransform: "uppercase",
                               letterSpacing: "0.05em",
                               color:
-                                f.severity === "danger" ? "#e74c3c" : "#856404",
+                                f.severity === "danger"
+                                  ? "var(--rausch)"
+                                  : "var(--amber)",
                               marginBottom: 3,
                             }}
                           >
@@ -1619,19 +1690,17 @@ export default function OwnerPage() {
                 <div
                   style={{
                     background: "var(--brand-surface)",
-                    borderRadius: 16,
-                    boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+                    borderRadius: 20,
+                    boxShadow: "var(--shadow-s)",
                     border: "1px solid var(--brand-border)",
                     padding: "24px",
                   }}
                 >
                   <div
                     style={{
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: "var(--brand-text-muted)",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.06em",
+                      fontSize: 13,
+                      fontWeight: 800,
+                      color: "var(--brand-text)",
                       marginBottom: 14,
                     }}
                   >
@@ -1639,7 +1708,7 @@ export default function OwnerPage() {
                   </div>
                   <p
                     style={{
-                      fontSize: 12,
+                      fontSize: 12.5,
                       color: "var(--brand-text-muted)",
                       marginBottom: 14,
                     }}
@@ -1682,7 +1751,7 @@ export default function OwnerPage() {
                         !newChecklistTitle.trim() ||
                         !newChecklistItems.trim()
                           ? "var(--brand-border)"
-                          : "linear-gradient(135deg, #1a2744, #2cb5b0)",
+                          : "var(--rausch)",
                       color:
                         creatingChecklist ||
                         !newChecklistTitle.trim() ||
@@ -1690,10 +1759,10 @@ export default function OwnerPage() {
                           ? "var(--brand-text-muted)"
                           : "white",
                       border: "none",
-                      borderRadius: 10,
+                      borderRadius: 12,
                       padding: "11px 24px",
                       fontSize: 14,
-                      fontWeight: 600,
+                      fontWeight: 700,
                       cursor:
                         creatingChecklist ||
                         !newChecklistTitle.trim() ||
@@ -1720,10 +1789,10 @@ export default function OwnerPage() {
                   <div
                     style={{
                       background: "var(--brand-surface)",
-                      borderRadius: 16,
+                      borderRadius: 20,
                       padding: 60,
                       textAlign: "center",
-                      boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+                      boxShadow: "var(--shadow-s)",
                       border: "1px solid var(--brand-border)",
                     }}
                   >
@@ -1744,8 +1813,8 @@ export default function OwnerPage() {
                       key={c.id}
                       style={{
                         background: "var(--brand-surface)",
-                        borderRadius: 16,
-                        boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+                        borderRadius: 20,
+                        boxShadow: "var(--shadow-s)",
                         border: "1px solid var(--brand-border)",
                         padding: "20px 24px",
                       }}
@@ -1775,12 +1844,12 @@ export default function OwnerPage() {
                               onClick={() => setEditingChecklistId(null)}
                               style={{
                                 padding: "8px 18px",
-                                border: "1.5px solid var(--brand-border)",
-                                borderRadius: 8,
+                                border: "1px solid var(--brand-border)",
+                                borderRadius: 10,
                                 background: "var(--brand-surface)",
                                 color: "var(--brand-text)",
                                 fontSize: 13,
-                                fontWeight: 600,
+                                fontWeight: 700,
                                 cursor: "pointer",
                               }}
                             >
@@ -1791,13 +1860,12 @@ export default function OwnerPage() {
                               disabled={savingChecklist}
                               style={{
                                 padding: "8px 18px",
-                                background:
-                                  "linear-gradient(135deg, #1a2744, #2cb5b0)",
+                                background: "var(--rausch)",
                                 border: "none",
-                                borderRadius: 8,
+                                borderRadius: 10,
                                 color: "white",
                                 fontSize: 13,
-                                fontWeight: 600,
+                                fontWeight: 700,
                                 cursor: "pointer",
                               }}
                             >
@@ -1820,7 +1888,7 @@ export default function OwnerPage() {
                             <div
                               style={{
                                 fontSize: 15,
-                                fontWeight: 700,
+                                fontWeight: 800,
                                 color: "var(--brand-text)",
                               }}
                             >
@@ -1831,10 +1899,10 @@ export default function OwnerPage() {
                                 onClick={() => startEditChecklist(c)}
                                 style={{
                                   padding: "5px 14px",
-                                  borderRadius: 8,
+                                  borderRadius: 10,
                                   fontSize: 12,
-                                  fontWeight: 600,
-                                  border: "1.5px solid var(--brand-border)",
+                                  fontWeight: 700,
+                                  border: "1px solid var(--brand-border)",
                                   background: "var(--brand-surface)",
                                   color: "var(--brand-text)",
                                   cursor: "pointer",
@@ -1846,12 +1914,12 @@ export default function OwnerPage() {
                                 onClick={() => handleDeleteChecklist(c.id)}
                                 style={{
                                   padding: "5px 14px",
-                                  borderRadius: 8,
+                                  borderRadius: 10,
                                   fontSize: 12,
-                                  fontWeight: 600,
-                                  border: "1.5px solid #fecaca",
-                                  background: "#fef2f2",
-                                  color: "#e74c3c",
+                                  fontWeight: 700,
+                                  border: "1px solid rgba(255,56,92,.3)",
+                                  background: "rgba(255,56,92,.08)",
+                                  color: "var(--rausch)",
                                   cursor: "pointer",
                                 }}
                               >
@@ -1898,19 +1966,17 @@ export default function OwnerPage() {
                 <div
                   style={{
                     background: "var(--brand-surface)",
-                    borderRadius: 16,
-                    boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+                    borderRadius: 20,
+                    boxShadow: "var(--shadow-s)",
                     border: "1px solid var(--brand-border)",
                     padding: "24px",
                   }}
                 >
                   <div
                     style={{
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: "var(--brand-text-muted)",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.06em",
+                      fontSize: 13,
+                      fontWeight: 800,
+                      color: "var(--brand-text)",
                       marginBottom: 14,
                     }}
                   >
@@ -1928,16 +1994,16 @@ export default function OwnerPage() {
                       style={{
                         flex: 1,
                         padding: "11px 14px",
-                        border: "1.5px solid var(--brand-border)",
-                        borderRadius: 10,
+                        border: "1px solid var(--brand-border)",
+                        borderRadius: 12,
                         fontSize: 14,
                         color: "var(--brand-text)",
                         outline: "none",
                         fontFamily: "inherit",
+                        background: "var(--brand-surface)",
                       }}
                       onFocus={(e) =>
-                        (e.currentTarget.style.borderColor =
-                          "var(--brand-accent)")
+                        (e.currentTarget.style.borderColor = "var(--rausch)")
                       }
                       onBlur={(e) =>
                         (e.currentTarget.style.borderColor =
@@ -1951,24 +2017,20 @@ export default function OwnerPage() {
                         background:
                           addingReceiver || !newReceiverName.trim()
                             ? "var(--brand-border)"
-                            : "linear-gradient(135deg, #1a2744, #2cb5b0)",
+                            : "var(--rausch)",
                         color:
                           addingReceiver || !newReceiverName.trim()
                             ? "var(--brand-text-muted)"
                             : "white",
                         border: "none",
-                        borderRadius: 10,
+                        borderRadius: 12,
                         padding: "11px 24px",
                         fontSize: 14,
-                        fontWeight: 600,
+                        fontWeight: 700,
                         cursor:
                           addingReceiver || !newReceiverName.trim()
                             ? "not-allowed"
                             : "pointer",
-                        boxShadow:
-                          addingReceiver || !newReceiverName.trim()
-                            ? "none"
-                            : "0 4px 16px rgba(44,181,176,0.3)",
                       }}
                     >
                       {addingReceiver ? "Adding..." : "+ Add"}
@@ -1980,10 +2042,10 @@ export default function OwnerPage() {
                   <div
                     style={{
                       background: "var(--brand-surface)",
-                      borderRadius: 16,
+                      borderRadius: 20,
                       padding: 60,
                       textAlign: "center",
-                      boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+                      boxShadow: "var(--shadow-s)",
                       border: "1px solid var(--brand-border)",
                     }}
                   >
@@ -2010,8 +2072,8 @@ export default function OwnerPage() {
                         key={r.id}
                         style={{
                           background: "var(--brand-surface)",
-                          borderRadius: 14,
-                          boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+                          borderRadius: 16,
+                          boxShadow: "var(--shadow-s)",
                           border: "1px solid var(--brand-border)",
                           padding: "16px 24px",
                           display: "flex",
@@ -2030,9 +2092,9 @@ export default function OwnerPage() {
                             style={{
                               width: 38,
                               height: 38,
-                              borderRadius: 10,
+                              borderRadius: "50%",
                               background:
-                                "linear-gradient(135deg, #1a2744, #2cb5b0)",
+                                "linear-gradient(135deg, var(--rausch), #C13584)",
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
@@ -2046,7 +2108,7 @@ export default function OwnerPage() {
                           <span
                             style={{
                               fontSize: 15,
-                              fontWeight: 600,
+                              fontWeight: 700,
                               color: "var(--brand-text)",
                             }}
                           >
@@ -2057,12 +2119,12 @@ export default function OwnerPage() {
                           onClick={() => handleRemoveReceiver(r.id)}
                           style={{
                             padding: "5px 14px",
-                            borderRadius: 8,
+                            borderRadius: 10,
                             fontSize: 12,
-                            fontWeight: 600,
-                            border: "1.5px solid #fecaca",
-                            background: "#fef2f2",
-                            color: "#e74c3c",
+                            fontWeight: 700,
+                            border: "1px solid rgba(255,56,92,.3)",
+                            background: "rgba(255,56,92,.08)",
+                            color: "var(--rausch)",
                             cursor: "pointer",
                           }}
                         >
@@ -2084,10 +2146,10 @@ export default function OwnerPage() {
                   <div
                     style={{
                       background: "var(--brand-surface)",
-                      borderRadius: 16,
+                      borderRadius: 20,
                       padding: 60,
                       textAlign: "center",
-                      boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+                      boxShadow: "var(--shadow-s)",
                       border: "1px solid var(--brand-border)",
                     }}
                   >
@@ -2107,13 +2169,10 @@ export default function OwnerPage() {
                       key={emp.id}
                       style={{
                         background: "var(--brand-surface)",
-                        borderRadius: 16,
-                        boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+                        borderRadius: 20,
+                        boxShadow: "var(--shadow-s)",
                         border: "1px solid var(--brand-border)",
                         padding: "20px 24px",
-                        borderLeft: `4px solid ${
-                          STATUS_COLORS[emp.status]?.bg || "var(--brand-border)"
-                        }`,
                         opacity: emp.status === "revoked" ? 0.6 : 1,
                       }}
                     >
@@ -2137,9 +2196,9 @@ export default function OwnerPage() {
                             style={{
                               width: 44,
                               height: 44,
-                              borderRadius: 12,
+                              borderRadius: "50%",
                               background:
-                                "linear-gradient(135deg, #1a2744, #2cb5b0)",
+                                "linear-gradient(135deg, var(--rausch), #C13584)",
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
@@ -2174,7 +2233,7 @@ export default function OwnerPage() {
                               <div
                                 style={{
                                   fontSize: 11,
-                                  color: "#856404",
+                                  color: "var(--amber)",
                                   marginTop: 2,
                                 }}
                               >
@@ -2195,9 +2254,9 @@ export default function OwnerPage() {
                           <span
                             style={{
                               padding: "4px 12px",
-                              borderRadius: 20,
+                              borderRadius: 999,
                               fontSize: 12,
-                              fontWeight: 600,
+                              fontWeight: 700,
                               background: ROLE_COLORS[emp.role]?.bg,
                               color: ROLE_COLORS[emp.role]?.color,
                             }}
@@ -2207,9 +2266,9 @@ export default function OwnerPage() {
                           <span
                             style={{
                               padding: "4px 12px",
-                              borderRadius: 20,
+                              borderRadius: 999,
                               fontSize: 12,
-                              fontWeight: 600,
+                              fontWeight: 700,
                               background: STATUS_COLORS[emp.status]?.bg,
                               color: STATUS_COLORS[emp.status]?.color,
                             }}
@@ -2221,12 +2280,12 @@ export default function OwnerPage() {
                               onClick={() => handleReactivate(emp)}
                               style={{
                                 padding: "6px 14px",
-                                borderRadius: 8,
+                                borderRadius: 10,
                                 fontSize: 12,
-                                fontWeight: 600,
-                                border: "1.5px solid #d4edda",
-                                background: "#f0fff4",
-                                color: "#155724",
+                                fontWeight: 700,
+                                border: "1px solid rgba(0,138,5,.3)",
+                                background: "rgba(0,138,5,.08)",
+                                color: "var(--green)",
                                 cursor: "pointer",
                               }}
                             >
@@ -2237,12 +2296,12 @@ export default function OwnerPage() {
                               onClick={() => handleRevoke(emp)}
                               style={{
                                 padding: "6px 14px",
-                                borderRadius: 8,
+                                borderRadius: 10,
                                 fontSize: 12,
-                                fontWeight: 600,
-                                border: "1.5px solid #fff3cd",
-                                background: "#fffdf0",
-                                color: "#856404",
+                                fontWeight: 700,
+                                border: "1px solid rgba(200,125,0,.3)",
+                                background: "rgba(200,125,0,.08)",
+                                color: "var(--amber)",
                                 cursor: "pointer",
                               }}
                             >
@@ -2253,12 +2312,12 @@ export default function OwnerPage() {
                             onClick={() => handleRemove(emp)}
                             style={{
                               padding: "6px 14px",
-                              borderRadius: 8,
+                              borderRadius: 10,
                               fontSize: 12,
-                              fontWeight: 600,
-                              border: "1.5px solid #fecaca",
-                              background: "#fef2f2",
-                              color: "#e74c3c",
+                              fontWeight: 700,
+                              border: "1px solid rgba(255,56,92,.3)",
+                              background: "rgba(255,56,92,.08)",
+                              color: "var(--rausch)",
                               cursor: "pointer",
                             }}
                           >
@@ -2281,10 +2340,10 @@ export default function OwnerPage() {
                   <div
                     style={{
                       background: "var(--brand-surface)",
-                      borderRadius: 16,
+                      borderRadius: 20,
                       padding: 60,
                       textAlign: "center",
-                      boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+                      boxShadow: "var(--shadow-s)",
                       border: "1px solid var(--brand-border)",
                     }}
                   >
@@ -2305,12 +2364,11 @@ export default function OwnerPage() {
                       key={note.id}
                       style={{
                         background: "var(--brand-surface)",
-                        borderRadius: 16,
-                        boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+                        borderRadius: 20,
                         border: "1px solid var(--brand-border)",
                         padding: "18px 24px",
-                        borderLeft: `4px solid ${
-                          CATEGORY_COLORS[note.category]?.bg ||
+                        boxShadow: `var(--shadow-s), inset 3px 0 0 ${
+                          CATEGORY_COLORS[note.category]?.color ||
                           "var(--brand-border)"
                         }`,
                       }}
@@ -2326,9 +2384,9 @@ export default function OwnerPage() {
                         <span
                           style={{
                             padding: "3px 10px",
-                            borderRadius: 20,
+                            borderRadius: 999,
                             fontSize: 12,
-                            fontWeight: 600,
+                            fontWeight: 700,
                             background: CATEGORY_COLORS[note.category]?.bg,
                             color: CATEGORY_COLORS[note.category]?.color,
                           }}
@@ -2340,7 +2398,7 @@ export default function OwnerPage() {
                             style={{
                               marginLeft: "auto",
                               fontSize: 16,
-                              fontWeight: 700,
+                              fontWeight: 800,
                               color: "var(--brand-text)",
                             }}
                           >
@@ -2382,10 +2440,10 @@ export default function OwnerPage() {
                   <div
                     style={{
                       background: "var(--brand-surface)",
-                      borderRadius: 16,
+                      borderRadius: 20,
                       padding: 60,
                       textAlign: "center",
-                      boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+                      boxShadow: "var(--shadow-s)",
                       border: "1px solid var(--brand-border)",
                     }}
                   >
@@ -2406,12 +2464,12 @@ export default function OwnerPage() {
                         key={p.id}
                         style={{
                           background: "var(--brand-surface)",
-                          borderRadius: 16,
-                          boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+                          borderRadius: 20,
                           border: "1px solid var(--brand-border)",
                           padding: "20px 24px",
-                          borderLeft: `4px solid ${
-                            STATUS_COLORS[p.status]?.bg || "var(--brand-border)"
+                          boxShadow: `var(--shadow-s), inset 3px 0 0 ${
+                            STATUS_COLORS[p.status]?.color ||
+                            "var(--brand-border)"
                           }`,
                         }}
                       >
@@ -2460,7 +2518,7 @@ export default function OwnerPage() {
                             <div
                               style={{
                                 fontSize: 20,
-                                fontWeight: 700,
+                                fontWeight: 800,
                                 color: "var(--brand-text)",
                                 marginBottom: 6,
                               }}
@@ -2470,9 +2528,9 @@ export default function OwnerPage() {
                             <span
                               style={{
                                 padding: "3px 10px",
-                                borderRadius: 20,
+                                borderRadius: 999,
                                 fontSize: 12,
-                                fontWeight: 600,
+                                fontWeight: 700,
                                 background: STATUS_COLORS[p.status]?.bg,
                                 color: STATUS_COLORS[p.status]?.color,
                               }}
@@ -2568,8 +2626,8 @@ export default function OwnerPage() {
                       style={{
                         width: "100%",
                         padding: "9px 14px 9px 34px",
-                        border: "1.5px solid var(--brand-border)",
-                        borderRadius: 10,
+                        border: "1px solid var(--brand-border)",
+                        borderRadius: 12,
                         fontSize: 13,
                         color: "var(--brand-text)",
                         outline: "none",
@@ -2596,9 +2654,10 @@ export default function OwnerPage() {
                     onChange={(e) => setFilterProperty(e.target.value)}
                     style={{
                       padding: "9px 12px",
-                      border: "1.5px solid var(--brand-border)",
-                      borderRadius: 10,
+                      border: "1px solid var(--brand-border)",
+                      borderRadius: 12,
                       fontSize: 13,
+                      fontWeight: 600,
                       color: "var(--brand-text)",
                       background: "var(--brand-surface)",
                       outline: "none",
@@ -2619,9 +2678,10 @@ export default function OwnerPage() {
                     onChange={(e) => setFilterPlatform(e.target.value)}
                     style={{
                       padding: "9px 12px",
-                      border: "1.5px solid var(--brand-border)",
-                      borderRadius: 10,
+                      border: "1px solid var(--brand-border)",
+                      borderRadius: 12,
                       fontSize: 13,
+                      fontWeight: 600,
                       color: "var(--brand-text)",
                       background: "var(--brand-surface)",
                       outline: "none",
@@ -2642,9 +2702,10 @@ export default function OwnerPage() {
                     onChange={(e) => setFilterPaymentState(e.target.value)}
                     style={{
                       padding: "9px 12px",
-                      border: "1.5px solid var(--brand-border)",
-                      borderRadius: 10,
+                      border: "1px solid var(--brand-border)",
+                      borderRadius: 12,
                       fontSize: 13,
+                      fontWeight: 600,
                       color: "var(--brand-text)",
                       background: "var(--brand-surface)",
                       outline: "none",
@@ -2663,9 +2724,10 @@ export default function OwnerPage() {
                     onChange={(e) => setFilterBookingStatus(e.target.value)}
                     style={{
                       padding: "9px 12px",
-                      border: "1.5px solid var(--brand-border)",
-                      borderRadius: 10,
+                      border: "1px solid var(--brand-border)",
+                      borderRadius: 12,
                       fontSize: 13,
+                      fontWeight: 600,
                       color: "var(--brand-text)",
                       background: "var(--brand-surface)",
                       outline: "none",
@@ -2702,12 +2764,12 @@ export default function OwnerPage() {
                       }}
                       style={{
                         padding: "9px 16px",
-                        borderRadius: 10,
+                        borderRadius: 12,
                         fontSize: 13,
-                        fontWeight: 600,
-                        border: "1.5px solid #fecaca",
-                        background: "#fef2f2",
-                        color: "#e74c3c",
+                        fontWeight: 700,
+                        border: "1px solid rgba(255,56,92,.3)",
+                        background: "rgba(255,56,92,.08)",
+                        color: "var(--rausch)",
                         cursor: "pointer",
                       }}
                     >
@@ -2736,12 +2798,11 @@ export default function OwnerPage() {
                           key={b.id}
                           style={{
                             background: "var(--brand-surface)",
-                            borderRadius: 16,
-                            boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+                            borderRadius: 20,
                             border: "1px solid var(--brand-border)",
                             padding: "20px 24px",
-                            borderLeft: `4px solid ${
-                              STATUS_COLORS[b.status]?.bg ||
+                            boxShadow: `var(--shadow-s), inset 3px 0 0 ${
+                              STATUS_COLORS[b.status]?.color ||
                               "var(--brand-border)"
                             }`,
                           }}
@@ -2767,9 +2828,9 @@ export default function OwnerPage() {
                                 style={{
                                   width: 40,
                                   height: 40,
-                                  borderRadius: 10,
+                                  borderRadius: "50%",
                                   background:
-                                    "linear-gradient(135deg, #1a2744, #2cb5b0)",
+                                    "linear-gradient(135deg, var(--rausch), #C13584)",
                                   display: "flex",
                                   alignItems: "center",
                                   justifyContent: "center",
@@ -2849,9 +2910,9 @@ export default function OwnerPage() {
                               <span
                                 style={{
                                   padding: "4px 12px",
-                                  borderRadius: 20,
+                                  borderRadius: 999,
                                   fontSize: 12,
-                                  fontWeight: 600,
+                                  fontWeight: 700,
                                   background: STATUS_COLORS[b.status]?.bg,
                                   color: STATUS_COLORS[b.status]?.color,
                                 }}
@@ -2867,7 +2928,7 @@ export default function OwnerPage() {
                               gap: 20,
                               flexWrap: "wrap",
                               paddingTop: 14,
-                              borderTop: "1px solid var(--background)",
+                              borderTop: "1px solid var(--brand-border)",
                             }}
                           >
                             {[
@@ -2893,7 +2954,7 @@ export default function OwnerPage() {
                                     fontWeight: 700,
                                     color:
                                       item.label === "Balance" && item.val > 0
-                                        ? "#e74c3c"
+                                        ? "var(--rausch)"
                                         : "var(--brand-text)",
                                   }}
                                 >
@@ -2964,7 +3025,7 @@ export default function OwnerPage() {
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(0,0,0,0.5)",
+            background: "rgba(0,0,0,0.45)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -2979,7 +3040,7 @@ export default function OwnerPage() {
               padding: 36,
               width: "100%",
               maxWidth: 460,
-              boxShadow: "0 32px 80px rgba(0,0,0,0.6)",
+              boxShadow: "var(--shadow)",
             }}
           >
             <div
@@ -2993,7 +3054,7 @@ export default function OwnerPage() {
               <h2
                 style={{
                   fontSize: 20,
-                  fontWeight: 700,
+                  fontWeight: 800,
                   color: "var(--brand-text)",
                 }}
               >
@@ -3002,9 +3063,9 @@ export default function OwnerPage() {
               <button
                 onClick={() => setShowInviteForm(false)}
                 style={{
-                  background: "var(--brand-border)",
-                  border: "none",
-                  borderRadius: 8,
+                  background: "var(--brand-bg)",
+                  border: "1px solid var(--brand-border)",
+                  borderRadius: "50%",
                   width: 32,
                   height: 32,
                   cursor: "pointer",
@@ -3029,7 +3090,7 @@ export default function OwnerPage() {
                   placeholder="Maria Santos"
                   style={inputStyle}
                   onFocus={(e) =>
-                    (e.currentTarget.style.borderColor = "var(--brand-accent)")
+                    (e.currentTarget.style.borderColor = "var(--rausch)")
                   }
                   onBlur={(e) =>
                     (e.currentTarget.style.borderColor = "var(--brand-border)")
@@ -3045,7 +3106,7 @@ export default function OwnerPage() {
                   placeholder="maria@example.com"
                   style={inputStyle}
                   onFocus={(e) =>
-                    (e.currentTarget.style.borderColor = "var(--brand-accent)")
+                    (e.currentTarget.style.borderColor = "var(--rausch)")
                   }
                   onBlur={(e) =>
                     (e.currentTarget.style.borderColor = "var(--brand-border)")
@@ -3070,12 +3131,12 @@ export default function OwnerPage() {
               {inviteError && (
                 <div
                   style={{
-                    background: "#fef2f2",
-                    border: "1px solid #fecaca",
-                    borderRadius: 8,
+                    background: "rgba(255,56,92,.08)",
+                    border: "1px solid rgba(255,56,92,.3)",
+                    borderRadius: 10,
                     padding: "10px 14px",
                     fontSize: 13,
-                    color: "#e74c3c",
+                    color: "var(--rausch)",
                   }}
                 >
                   {inviteError}
@@ -3084,12 +3145,12 @@ export default function OwnerPage() {
               {inviteSuccess && (
                 <div
                   style={{
-                    background: "#d4edda",
-                    border: "1px solid #c3e6cb",
-                    borderRadius: 8,
+                    background: "rgba(0,138,5,.08)",
+                    border: "1px solid rgba(0,138,5,.3)",
+                    borderRadius: 10,
                     padding: "10px 14px",
                     fontSize: 13,
-                    color: "#155724",
+                    color: "var(--green)",
                   }}
                 >
                   ✓ {inviteSuccess}
@@ -3102,12 +3163,12 @@ export default function OwnerPage() {
                   style={{
                     flex: 1,
                     padding: 12,
-                    border: "1.5px solid var(--brand-border)",
-                    borderRadius: 10,
+                    border: "1px solid var(--brand-border)",
+                    borderRadius: 12,
                     background: "var(--brand-surface)",
                     color: "var(--brand-text-muted)",
                     fontSize: 14,
-                    fontWeight: 600,
+                    fontWeight: 700,
                     cursor: "pointer",
                   }}
                 >
@@ -3124,23 +3185,19 @@ export default function OwnerPage() {
                     background:
                       inviting || !inviteName.trim() || !inviteEmail.trim()
                         ? "var(--brand-border)"
-                        : "linear-gradient(135deg, #1a2744, #2cb5b0)",
+                        : "var(--rausch)",
                     border: "none",
-                    borderRadius: 10,
+                    borderRadius: 12,
                     color:
                       inviting || !inviteName.trim() || !inviteEmail.trim()
                         ? "var(--brand-text-muted)"
                         : "white",
                     fontSize: 14,
-                    fontWeight: 600,
+                    fontWeight: 700,
                     cursor:
                       inviting || !inviteName.trim() || !inviteEmail.trim()
                         ? "not-allowed"
                         : "pointer",
-                    boxShadow:
-                      inviting || !inviteName.trim() || !inviteEmail.trim()
-                        ? "none"
-                        : "0 4px 16px rgba(44,181,176,0.3)",
                   }}
                 >
                   {inviting ? "Sending invite..." : "Send invite"}
@@ -3152,10 +3209,30 @@ export default function OwnerPage() {
       )}
 
       <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
+
+        :root {
+          --rausch:#FF385C; --violet:#6C5CE7; --green:#008A05; --amber:#C87D00;
+          --ink:#222222; --gray:#717171; --line:#EBEBEB; --line-2:#DDDDDD;
+          --bg:#FFFFFF; --bg-2:#F7F7F7; --card:#FFFFFF; --nav-bg:rgba(255,255,255,.92);
+          --shadow:0 6px 20px rgba(0,0,0,.10); --shadow-s:0 1px 2px rgba(0,0,0,.06);
+          --brand-bg: var(--bg-2);
+          --brand-surface: var(--card);
+          --brand-text: var(--ink);
+          --brand-text-muted: var(--gray);
+          --brand-border: var(--line);
+          --brand-accent: var(--rausch);
+          --background: var(--bg);
+        }
+        [data-theme="dark"] {
+          --ink:#F4F4F5; --gray:#A6A6AD; --line:#2C2C31; --line-2:#3A3A40;
+          --bg:#131316; --bg-2:#1C1C20; --card:#1F1F23; --nav-bg:rgba(19,19,22,.9);
+          --shadow:0 8px 24px rgba(0,0,0,.55); --shadow-s:0 1px 2px rgba(0,0,0,.5);
+        }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         input[type=number]::-webkit-outer-spin-button,
         input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
-        input::placeholder { color: #5c5c64; }
+        input::placeholder { color: var(--gray); }
         select option { background: var(--brand-surface); color: var(--brand-text); }
       `}</style>
     </div>
