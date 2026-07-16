@@ -379,6 +379,16 @@ const CATEGORY_TIME_LABEL: Record<StaySlotCategory, string> = {
   Night: "9PM-7AM",
 };
 
+// Maps an open slot category back to the canonical fixed stayType string,
+// so PARTIAL_ALTERNATIVE responses can hand ManyChat a ready-to-use value
+// for overwriting the stay_type field on confirmation, instead of making
+// ManyChat parse the guest-facing `summary` sentence to figure out which
+// type is actually open.
+const CATEGORY_TO_FIXED_STAY_TYPE: Record<StaySlotCategory, FixedStayType> = {
+  Day: "Day (Short) 8AM-8PM",
+  Night: "Night (Short) 9PM-7AM",
+};
+
 export async function POST(req: NextRequest) {
   try {
     // 1. Verify the request actually came from ManyChat
@@ -599,6 +609,11 @@ export async function POST(req: NextRequest) {
     let flag: AvailabilityFlag;
     let suggestedCheckIn: string | null = null;
     let suggestedCheckOut: string | null = null;
+    // Only meaningful for PARTIAL_ALTERNATIVE — the canonical fixed
+    // stayType string ("Day (Short) 8AM-8PM" / "Night (Short) 9PM-7AM")
+    // for the single open slot, ready to overwrite the stay_type field on
+    // confirmation without ManyChat having to parse the summary text.
+    let suggestedStayType: FixedStayType | null = null;
 
     if (bookableUnits.length > 0) {
       flag = "BOOKABLE";
@@ -662,6 +677,15 @@ export async function POST(req: NextRequest) {
       );
 
       const firstOpenType = openTypes[0];
+
+      // Set regardless of which message branch below fires — both the
+      // Long-downgrade and the generic Day/Night-mismatch case offer the
+      // same single open category, just with different guest-facing
+      // phrasing.
+      if (openTypes.length === 1 && firstOpenType) {
+        suggestedStayType = CATEGORY_TO_FIXED_STAY_TYPE[firstOpenType];
+      }
+
       if (
         requestedCategory === "Long" &&
         openTypes.length === 1 &&
@@ -698,6 +722,7 @@ export async function POST(req: NextRequest) {
       bookable: flag === "BOOKABLE",
       suggestedCheckIn,
       suggestedCheckOut,
+      suggestedStayType,
     });
   } catch (err) {
     // Catch-all so ManyChat always gets a real JSON error instead of a
