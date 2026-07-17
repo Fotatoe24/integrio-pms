@@ -321,6 +321,152 @@ function getBookingPaymentState(b: Booking) {
   return "PARTIAL";
 }
 
+// ── Chart + Stay mix helpers ────────────────────────────────────────────
+
+interface ChartBucket {
+  label: string;
+  value: number;
+}
+
+function buildChartBuckets(
+  paymentsSubset: Payment[],
+  range: [Date, Date],
+  mode: OverviewMode
+): ChartBucket[] {
+  const paid = paymentsSubset.filter((p) => p.status === "PAID" && p.paidAt);
+
+  if (mode === "week") {
+    const buckets: ChartBucket[] = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(range[0]);
+      d.setDate(d.getDate() + i);
+      const dayStart = startOfDay(d).getTime();
+      const dayEnd = endOfDay(d).getTime();
+      const value = paid
+        .filter((p) => {
+          const t = new Date(p.paidAt as string).getTime();
+          return t >= dayStart && t <= dayEnd;
+        })
+        .reduce((s, p) => s + Number(p.amount), 0);
+      buckets.push({
+        label: d.toLocaleDateString("en-PH", { weekday: "short" }),
+        value,
+      });
+    }
+    return buckets;
+  }
+
+  if (mode === "month") {
+    const days = getDaysInRange(range);
+    const buckets: ChartBucket[] = [];
+    const step = Math.max(1, Math.ceil(days / 10));
+    for (let i = 0; i < days; i += step) {
+      const segStart = new Date(range[0]);
+      segStart.setDate(segStart.getDate() + i);
+      const segEndDate = new Date(range[0]);
+      segEndDate.setDate(
+        segEndDate.getDate() + Math.min(i + step - 1, days - 1)
+      );
+      const segStartMs = startOfDay(segStart).getTime();
+      const segEndMs = endOfDay(segEndDate).getTime();
+      const value = paid
+        .filter((p) => {
+          const t = new Date(p.paidAt as string).getTime();
+          return t >= segStartMs && t <= segEndMs;
+        })
+        .reduce((s, p) => s + Number(p.amount), 0);
+      buckets.push({
+        label: `${segStart.getDate()}`,
+        value,
+      });
+    }
+    return buckets;
+  }
+
+  // year -> 12 months
+  const buckets: ChartBucket[] = [];
+  const year = range[0].getFullYear();
+  for (let m = 0; m < 12; m++) {
+    const monthStart = new Date(year, m, 1).getTime();
+    const monthEnd = new Date(year, m + 1, 0, 23, 59, 59, 999).getTime();
+    const value = paid
+      .filter((p) => {
+        const t = new Date(p.paidAt as string).getTime();
+        return t >= monthStart && t <= monthEnd;
+      })
+      .reduce((s, p) => s + Number(p.amount), 0);
+    buckets.push({
+      label: new Date(year, m, 1).toLocaleDateString("en-PH", {
+        month: "short",
+      }),
+      value,
+    });
+  }
+  return buckets;
+}
+
+type StayCategory = "day" | "night" | "full";
+
+function getStayCategory(stayType: string | null | undefined): StayCategory {
+  const s = (stayType || "").toLowerCase();
+  if (s.includes("night")) return "night";
+  if (s.includes("long")) return "full";
+  return "day";
+}
+
+interface StayMixEntry {
+  key: StayCategory;
+  label: string;
+  hrs: string;
+  note: string;
+  count: number;
+  pct: number;
+  colorVar: string;
+}
+
+function buildStayMix(bookingsSubset: Booking[]): StayMixEntry[] {
+  const active = bookingsSubset.filter((b) => b.status !== "CANCELLED");
+  const total = active.length;
+  const counts: Record<StayCategory, number> = { day: 0, night: 0, full: 0 };
+  active.forEach((b) => {
+    counts[getStayCategory(b.stayType)]++;
+  });
+
+  const meta: Record<
+    StayCategory,
+    { label: string; hrs: string; note: string; colorVar: string }
+  > = {
+    day: {
+      label: "Day Short",
+      hrs: "8AM–8PM",
+      note: "Daytime use, no overnight",
+      colorVar: "var(--amber)",
+    },
+    night: {
+      label: "Night Short",
+      hrs: "9PM–7AM",
+      note: "Overnight, evening to morning",
+      colorVar: "var(--violet)",
+    },
+    full: {
+      label: "Day Long",
+      hrs: "2PM–11AM",
+      note: "Full-day check-in to check-out",
+      colorVar: "var(--rausch)",
+    },
+  };
+
+  return (["day", "night", "full"] as StayCategory[]).map((key) => ({
+    key,
+    label: meta[key].label,
+    hrs: meta[key].hrs,
+    note: meta[key].note,
+    count: counts[key],
+    pct: total > 0 ? Math.round((counts[key] / total) * 100) : 0,
+    colorVar: meta[key].colorVar,
+  }));
+}
+
 export default function OwnerPage() {
   const router = useRouter();
   const [user, setUser] = useState<IntegrioUser | null>(null);
@@ -722,6 +868,18 @@ export default function OwnerPage() {
     [periodBookings, properties, periodRange]
   );
 
+  const chartBuckets = useMemo(
+    () => buildChartBuckets(periodPayments, periodRange, overviewMode),
+    [periodPayments, periodRange, overviewMode]
+  );
+  const chartMax = useMemo(
+    () => Math.max(1, ...chartBuckets.map((b) => b.value)),
+    [chartBuckets]
+  );
+
+  const stayMix = useMemo(() => buildStayMix(periodBookings), [periodBookings]);
+  const stayMixTotal = stayMix.reduce((s, e) => s + e.count, 0);
+
   const activeTeamSize = employees.filter((e) => e.status !== "revoked").length;
 
   function shiftPeriod(delta: number) {
@@ -877,21 +1035,7 @@ export default function OwnerPage() {
       }}
     >
       {/* Header */}
-      <div
-        style={{
-          background: "var(--nav-bg)",
-          backdropFilter: "saturate(180%) blur(10px)",
-          borderBottom: "1px solid var(--brand-border)",
-          padding: "0 32px",
-          height: 64,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          position: "sticky",
-          top: 0,
-          zIndex: 50,
-        }}
-      >
+      <div className="nav-in-owner">
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <img
             src="/blacklogo.png"
@@ -958,19 +1102,9 @@ export default function OwnerPage() {
 
           <button
             onClick={toggleTheme}
+            className="icon-btn-owner theme-toggle"
             aria-label="Toggle day or dark view"
             title="Toggle day / dark view"
-            style={{
-              width: 38,
-              height: 38,
-              border: "1px solid var(--brand-border)",
-              borderRadius: "50%",
-              background: "var(--brand-surface)",
-              color: "var(--brand-text)",
-              cursor: "pointer",
-              display: "grid",
-              placeItems: "center",
-            }}
           >
             {theme === "dark" ? (
               <svg
@@ -1002,33 +1136,10 @@ export default function OwnerPage() {
             )}
           </button>
 
-          <a
-            href="/settings"
-            style={{
-              fontSize: 13,
-              fontWeight: 600,
-              color: "var(--brand-text)",
-              border: "1px solid var(--brand-border)",
-              borderRadius: 12,
-              padding: "8px 16px",
-              textDecoration: "none",
-            }}
-          >
+          <a href="/settings" className="btn-owner">
             Settings
           </a>
-          <button
-            onClick={logout}
-            style={{
-              fontSize: 13,
-              fontWeight: 600,
-              color: "var(--brand-text-muted)",
-              background: "none",
-              border: "1px solid var(--brand-border)",
-              borderRadius: 12,
-              padding: "8px 16px",
-              cursor: "pointer",
-            }}
-          >
+          <button onClick={logout} className="btn-owner ghost-owner">
             Sign out
           </button>
         </div>
@@ -1074,41 +1185,24 @@ export default function OwnerPage() {
                 flexWrap: "wrap",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <div className="pnav-owner">
                 <button
                   onClick={() => shiftPeriod(-1)}
                   aria-label="Previous period"
-                  style={paginationBtnStyle(false)}
+                  className="nav-arrow-owner"
                 >
                   ‹
                 </button>
-                <span
-                  style={{
-                    fontSize: 13,
-                    fontWeight: 700,
-                    color: "var(--brand-text)",
-                    minWidth: 130,
-                    textAlign: "center",
-                  }}
-                >
-                  {periodLabel}
-                </span>
+                <span className="pnav-label-owner">{periodLabel}</span>
                 <button
                   onClick={() => shiftPeriod(1)}
                   aria-label="Next period"
-                  style={paginationBtnStyle(false)}
+                  className="nav-arrow-owner"
                 >
                   ›
                 </button>
               </div>
-              <div
-                style={{
-                  display: "flex",
-                  border: "1px solid var(--brand-border)",
-                  borderRadius: 12,
-                  overflow: "hidden",
-                }}
-              >
+              <div className="seg-owner">
                 {(["week", "month", "year"] as OverviewMode[]).map((m) => (
                   <button
                     key={m}
@@ -1116,21 +1210,7 @@ export default function OwnerPage() {
                       setOverviewMode(m);
                       setPeriodOffset(0);
                     }}
-                    style={{
-                      padding: "8px 16px",
-                      fontSize: 13,
-                      fontWeight: 700,
-                      border: "none",
-                      cursor: "pointer",
-                      background:
-                        overviewMode === m
-                          ? "var(--brand-text)"
-                          : "var(--brand-surface)",
-                      color:
-                        overviewMode === m
-                          ? "var(--background)"
-                          : "var(--brand-text-muted)",
-                    }}
+                    className={overviewMode === m ? "active" : ""}
                   >
                     {m === "week"
                       ? "Weekly"
@@ -1188,107 +1268,79 @@ export default function OwnerPage() {
                   style={{
                     display: "flex",
                     flexDirection: "column",
-                    gap: 16,
+                    gap: 20,
                     marginBottom: 28,
                   }}
                 >
-                  {/* Net income hero */}
-                  <div
-                    style={{
-                      background: "var(--brand-surface)",
-                      border: "1px solid var(--brand-border)",
-                      borderRadius: 20,
-                      padding: "28px 28px",
-                      display: "flex",
-                      alignItems: "flex-start",
-                      justifyContent: "space-between",
-                      flexWrap: "wrap",
-                      gap: 24,
-                    }}
-                  >
-                    <div>
-                      <div
-                        style={{
-                          fontSize: 12.5,
-                          fontWeight: 700,
-                          color: "var(--brand-text-muted)",
-                          marginBottom: 12,
-                        }}
-                      >
-                        Net income · {periodLabel}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 36,
-                          fontWeight: 800,
-                          letterSpacing: "-.02em",
-                          color: "var(--brand-text)",
-                          marginBottom: 6,
-                          lineHeight: 1.1,
-                        }}
-                      >
-                        {formatCurrency(periodStats.netIncome)}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 13,
-                          color: "var(--brand-text-muted)",
-                        }}
-                      >
-                        Income minus expenses for this{" "}
+                  {/* Earnings hero + chart */}
+                  <div className="earn-owner">
+                    <div className="cap-owner">
+                      Net income ·{" "}
+                      <span>
                         {overviewMode === "week"
-                          ? "week"
+                          ? "this week"
                           : overviewMode === "month"
-                          ? "month"
-                          : "year"}
-                      </div>
+                          ? "this month"
+                          : "this year"}
+                      </span>
                     </div>
-                    <div style={{ display: "flex", gap: 32, flexWrap: "wrap" }}>
-                      {[
-                        {
-                          label: "Collected",
-                          value: periodStats.collectedRevenue,
-                        },
-                        {
-                          label: "Expected",
-                          value: periodStats.expectedRevenue,
-                        },
-                        { label: "Expenses", value: periodStats.totalExpenses },
-                      ].map((item) => (
-                        <div key={item.label} style={{ textAlign: "right" }}>
-                          <div
-                            style={{
-                              fontSize: 12.5,
-                              fontWeight: 700,
-                              color: "var(--brand-text-muted)",
-                              marginBottom: 8,
-                            }}
-                          >
-                            {item.label}
+                    <div className="big-owner">
+                      {formatCurrency(periodStats.netIncome)}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 13,
+                        color: "var(--brand-text-muted)",
+                      }}
+                    >
+                      Income minus expenses for {periodLabel}
+                    </div>
+
+                    <div className="chart-owner">
+                      {chartBuckets.map((b, i) => (
+                        <div className="bcol-owner" key={i}>
+                          <div className="bwrap-owner">
+                            <div
+                              className="bar-owner"
+                              style={{
+                                height: `${Math.max(
+                                  4,
+                                  Math.round((b.value / chartMax) * 100)
+                                )}%`,
+                              }}
+                              title={formatCurrency(b.value)}
+                            />
                           </div>
-                          <div
-                            style={{
-                              fontSize: 17,
-                              fontWeight: 800,
-                              color: "var(--brand-text)",
-                            }}
-                          >
-                            ₱{item.value.toLocaleString("en-PH")}
-                          </div>
+                          <span className="bx-owner">{b.label}</span>
                         </div>
                       ))}
+                    </div>
+
+                    <div className="earn-sub-owner">
+                      <span>
+                        Collected{" "}
+                        <b>
+                          ₱
+                          {periodStats.collectedRevenue.toLocaleString("en-PH")}
+                        </b>
+                      </span>
+                      <span>
+                        Expected{" "}
+                        <b>
+                          ₱{periodStats.expectedRevenue.toLocaleString("en-PH")}
+                        </b>
+                      </span>
+                      <span>
+                        Expenses{" "}
+                        <b>
+                          ₱{periodStats.totalExpenses.toLocaleString("en-PH")}
+                        </b>
+                      </span>
                     </div>
                   </div>
 
                   {/* Quick stats */}
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns:
-                        "repeat(auto-fit, minmax(160px, 1fr))",
-                      gap: 16,
-                    }}
-                  >
+                  <div className="stats-owner">
                     {[
                       {
                         icon: "👥",
@@ -1306,49 +1358,80 @@ export default function OwnerPage() {
                             : "year"
                         }`,
                       },
-
                       {
                         icon: "🛏️",
                         value: `${periodOccupancy}%`,
                         label: "Occupancy rate",
                       },
                     ].map((s) => (
-                      <div
-                        key={s.label}
-                        style={{
-                          background: "var(--brand-surface)",
-                          border: "1px solid var(--brand-border)",
-                          borderRadius: 18,
-                          padding: "18px 20px",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 14,
-                        }}
-                      >
-                        <div style={{ fontSize: 20 }}>{s.icon}</div>
-                        <div>
-                          <div
-                            style={{
-                              fontSize: 22,
-                              fontWeight: 800,
-                              color: "var(--brand-text)",
-                              lineHeight: 1.1,
-                            }}
-                          >
-                            {s.value}
-                          </div>
-                          <div
-                            style={{
-                              fontSize: 12.5,
-                              color: "var(--brand-text-muted)",
-                              fontWeight: 600,
-                            }}
-                          >
-                            {s.label}
-                          </div>
+                      <div key={s.label} className="stat-owner">
+                        <div className="lbl-owner">
+                          {s.icon} {s.label}
                         </div>
+                        <div className="num-owner">{s.value}</div>
                       </div>
                     ))}
+                  </div>
+
+                  {/* Stay mix */}
+                  <div>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        marginBottom: 12,
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: 15,
+                          fontWeight: 800,
+                          color: "var(--brand-text)",
+                        }}
+                      >
+                        Stay mix
+                      </div>
+                      <span
+                        style={{
+                          fontSize: 12.5,
+                          color: "var(--brand-text-muted)",
+                          fontWeight: 600,
+                        }}
+                      >
+                        {stayMixTotal} booking{stayMixTotal === 1 ? "" : "s"}
+                      </span>
+                    </div>
+                    <div className="staymix-owner">
+                      {stayMix.map((entry) => (
+                        <div className="smcard-owner" key={entry.key}>
+                          <div className="sm-top-owner">
+                            <span className="sm-count-owner">
+                              {entry.count}
+                            </span>
+                            <span
+                              className="sm-pct-owner"
+                              style={{ color: entry.colorVar }}
+                            >
+                              {entry.pct}%
+                            </span>
+                          </div>
+                          <div className="sm-label-owner">
+                            {entry.label}{" "}
+                            <span className="hrs-owner">{entry.hrs}</span>
+                          </div>
+                          <div className="sm-note-owner">{entry.note}</div>
+                          <div className="sm-bar-owner">
+                            <i
+                              style={{
+                                width: `${entry.pct}%`,
+                                background: entry.colorVar,
+                              }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
@@ -1414,11 +1497,8 @@ export default function OwnerPage() {
                     leaderboard.map((entry, i) => (
                       <div
                         key={entry.person.id}
+                        className="member-row-owner"
                         style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          padding: "12px 0",
                           borderTop:
                             i === 0 ? "none" : "1px solid var(--brand-border)",
                         }}
@@ -1447,22 +1527,7 @@ export default function OwnerPage() {
                               ? "🥉"
                               : `#${i + 1}`}
                           </div>
-                          <div
-                            style={{
-                              width: 36,
-                              height: 36,
-                              borderRadius: "50%",
-                              background:
-                                "linear-gradient(135deg, var(--rausch), #C13584)",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              color: "white",
-                              fontWeight: 700,
-                              fontSize: 14,
-                              flexShrink: 0,
-                            }}
-                          >
+                          <div className="m-av-owner">
                             {entry.person.name.charAt(0).toUpperCase()}
                           </div>
                           <div>
@@ -1558,8 +1623,7 @@ export default function OwnerPage() {
                   {tab === "Redflags" && flags.length > 0 && (
                     <span
                       style={{
-                        background:
-                          activeTab === tab ? "var(--rausch)" : "var(--rausch)",
+                        background: "var(--rausch)",
                         color: "white",
                         borderRadius: 999,
                         fontSize: 10,
@@ -1578,9 +1642,7 @@ export default function OwnerPage() {
 
             {/* ── Redflags ── */}
             {activeTab === "Redflags" && (
-              <div
-                style={{ display: "flex", flexDirection: "column", gap: 12 }}
-              >
+              <div>
                 {flagsLoading ? (
                   <div
                     style={{
@@ -1619,7 +1681,7 @@ export default function OwnerPage() {
                       style={{
                         display: "flex",
                         justifyContent: "flex-end",
-                        marginBottom: 4,
+                        marginBottom: 12,
                       }}
                     >
                       <button
@@ -1629,54 +1691,27 @@ export default function OwnerPage() {
                         ↻ Refresh
                       </button>
                     </div>
-                    {flags.map((f, i) => (
-                      <div
-                        key={i}
-                        style={{
-                          background: "var(--brand-surface)",
-                          borderRadius: 16,
-                          border: "1px solid var(--brand-border)",
-                          padding: "16px 20px",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 14,
-                          boxShadow: `var(--shadow-s), inset 3px 0 0 ${
-                            f.severity === "danger"
-                              ? "var(--rausch)"
-                              : "var(--amber)"
-                          }`,
-                        }}
-                      >
-                        <div style={{ fontSize: 22 }}>
-                          {FLAG_META[f.type]?.icon || "🚩"}
-                        </div>
-                        <div>
-                          <div
-                            style={{
-                              fontSize: 11,
-                              fontWeight: 700,
-                              textTransform: "uppercase",
-                              letterSpacing: "0.05em",
-                              color:
-                                f.severity === "danger"
-                                  ? "var(--rausch)"
-                                  : "var(--amber)",
-                              marginBottom: 3,
-                            }}
-                          >
-                            {FLAG_META[f.type]?.label || f.type}
+                    <div className="alerts-owner">
+                      {flags.map((f, i) => (
+                        <div className="alert-owner" key={i}>
+                          <span
+                            className={`a-dot-owner ${
+                              f.severity === "danger" ? "crit" : "warn"
+                            }`}
+                          />
+                          <div className="a-body-owner">
+                            <div className="a-title-owner">
+                              {FLAG_META[f.type]?.icon || "🚩"}{" "}
+                              {FLAG_META[f.type]?.label || f.type}
+                            </div>
+                            <div className="a-desc-owner">{f.message}</div>
                           </div>
-                          <div
-                            style={{
-                              fontSize: 14,
-                              color: "var(--brand-text)",
-                            }}
-                          >
-                            {f.message}
-                          </div>
+                          <span className="a-tag-owner">
+                            {f.severity === "danger" ? "Critical" : "Warning"}
+                          </span>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </>
                 )}
               </div>
@@ -2088,21 +2123,7 @@ export default function OwnerPage() {
                             gap: 12,
                           }}
                         >
-                          <div
-                            style={{
-                              width: 38,
-                              height: 38,
-                              borderRadius: "50%",
-                              background:
-                                "linear-gradient(135deg, var(--rausch), #C13584)",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              color: "white",
-                              fontWeight: 700,
-                              fontSize: 15,
-                            }}
-                          >
+                          <div className="m-av-owner">
                             {r.name.charAt(0).toUpperCase()}
                           </div>
                           <span
@@ -2193,20 +2214,8 @@ export default function OwnerPage() {
                           }}
                         >
                           <div
-                            style={{
-                              width: 44,
-                              height: 44,
-                              borderRadius: "50%",
-                              background:
-                                "linear-gradient(135deg, var(--rausch), #C13584)",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              color: "white",
-                              fontWeight: 700,
-                              fontSize: 18,
-                              flexShrink: 0,
-                            }}
+                            className="m-av-owner"
+                            style={{ width: 44, height: 44, fontSize: 18 }}
                           >
                             {emp.name.charAt(0).toUpperCase()}
                           </div>
@@ -2333,9 +2342,7 @@ export default function OwnerPage() {
 
             {/* ── Expenses ── */}
             {activeTab === "Expenses" && (
-              <div
-                style={{ display: "flex", flexDirection: "column", gap: 12 }}
-              >
+              <div className="exp-owner">
                 {expenseNotes.length === 0 ? (
                   <div
                     style={{
@@ -2359,74 +2366,50 @@ export default function OwnerPage() {
                     </p>
                   </div>
                 ) : (
-                  expenseNotes.map((note) => (
-                    <div
-                      key={note.id}
-                      style={{
-                        background: "var(--brand-surface)",
-                        borderRadius: 20,
-                        border: "1px solid var(--brand-border)",
-                        padding: "18px 24px",
-                        boxShadow: `var(--shadow-s), inset 3px 0 0 ${
-                          CATEGORY_COLORS[note.category]?.color ||
-                          "var(--brand-border)"
-                        }`,
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 10,
-                          marginBottom: 8,
-                        }}
-                      >
-                        <span
-                          style={{
-                            padding: "3px 10px",
-                            borderRadius: 999,
-                            fontSize: 12,
-                            fontWeight: 700,
-                            background: CATEGORY_COLORS[note.category]?.bg,
-                            color: CATEGORY_COLORS[note.category]?.color,
-                          }}
-                        >
-                          {note.category}
-                        </span>
-                        {note.amount > 0 && (
-                          <span
+                  expenseNotes.map((note) => {
+                    const d = new Date(note.createdAt);
+                    return (
+                      <div className="exp-row-owner" key={note.id}>
+                        <div className="exp-date-owner">
+                          <span className="m">
+                            {d.toLocaleDateString("en-PH", { month: "short" })}
+                          </span>
+                          <span className="d">{d.getDate()}</span>
+                        </div>
+                        <div className="exp-info-owner">
+                          <div className="exp-title-owner">
+                            <span
+                              style={{
+                                padding: "3px 10px",
+                                borderRadius: 999,
+                                fontSize: 11,
+                                fontWeight: 700,
+                                background: CATEGORY_COLORS[note.category]?.bg,
+                                color: CATEGORY_COLORS[note.category]?.color,
+                              }}
+                            >
+                              {note.category}
+                            </span>
+                          </div>
+                          <div className="exp-note-owner">{note.content}</div>
+                          <div
                             style={{
-                              marginLeft: "auto",
-                              fontSize: 16,
-                              fontWeight: 800,
-                              color: "var(--brand-text)",
+                              fontSize: 11,
+                              color: "var(--brand-text-muted)",
+                              marginTop: 4,
                             }}
                           >
+                            {formatDateTime(note.createdAt)}
+                          </div>
+                        </div>
+                        {note.amount > 0 && (
+                          <div className="exp-amt-owner">
                             {formatCurrency(Number(note.amount))}
-                          </span>
+                          </div>
                         )}
                       </div>
-                      <p
-                        style={{
-                          fontSize: 14,
-                          lineHeight: 1.65,
-                          color: "var(--brand-text)",
-                          marginBottom: 10,
-                          whiteSpace: "pre-wrap",
-                        }}
-                      >
-                        {note.content}
-                      </p>
-                      <div
-                        style={{
-                          fontSize: 12,
-                          color: "var(--brand-text-muted)",
-                        }}
-                      >
-                        {formatDateTime(note.createdAt)}
-                      </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             )}
@@ -2652,18 +2635,7 @@ export default function OwnerPage() {
                   <select
                     value={filterProperty}
                     onChange={(e) => setFilterProperty(e.target.value)}
-                    style={{
-                      padding: "9px 12px",
-                      border: "1px solid var(--brand-border)",
-                      borderRadius: 12,
-                      fontSize: 13,
-                      fontWeight: 600,
-                      color: "var(--brand-text)",
-                      background: "var(--brand-surface)",
-                      outline: "none",
-                      cursor: "pointer",
-                      fontFamily: "inherit",
-                    }}
+                    className="chip-select-owner"
                   >
                     <option value="ALL">All Units</option>
                     {properties.map((p) => (
@@ -2676,18 +2648,7 @@ export default function OwnerPage() {
                   <select
                     value={filterPlatform}
                     onChange={(e) => setFilterPlatform(e.target.value)}
-                    style={{
-                      padding: "9px 12px",
-                      border: "1px solid var(--brand-border)",
-                      borderRadius: 12,
-                      fontSize: 13,
-                      fontWeight: 600,
-                      color: "var(--brand-text)",
-                      background: "var(--brand-surface)",
-                      outline: "none",
-                      cursor: "pointer",
-                      fontFamily: "inherit",
-                    }}
+                    className="chip-select-owner"
                   >
                     <option value="ALL">All Platforms</option>
                     <option value="Facebook">Facebook</option>
@@ -2700,18 +2661,7 @@ export default function OwnerPage() {
                   <select
                     value={filterPaymentState}
                     onChange={(e) => setFilterPaymentState(e.target.value)}
-                    style={{
-                      padding: "9px 12px",
-                      border: "1px solid var(--brand-border)",
-                      borderRadius: 12,
-                      fontSize: 13,
-                      fontWeight: 600,
-                      color: "var(--brand-text)",
-                      background: "var(--brand-surface)",
-                      outline: "none",
-                      cursor: "pointer",
-                      fontFamily: "inherit",
-                    }}
+                    className="chip-select-owner"
                   >
                     <option value="ALL">All Payments</option>
                     <option value="FULLY_PAID">Fully Paid</option>
@@ -2722,18 +2672,7 @@ export default function OwnerPage() {
                   <select
                     value={filterBookingStatus}
                     onChange={(e) => setFilterBookingStatus(e.target.value)}
-                    style={{
-                      padding: "9px 12px",
-                      border: "1px solid var(--brand-border)",
-                      borderRadius: 12,
-                      fontSize: 13,
-                      fontWeight: 600,
-                      color: "var(--brand-text)",
-                      background: "var(--brand-surface)",
-                      outline: "none",
-                      cursor: "pointer",
-                      fontFamily: "inherit",
-                    }}
+                    className="chip-select-owner"
                   >
                     <option value="ALL">All Status</option>
                     {[
@@ -2824,22 +2763,7 @@ export default function OwnerPage() {
                                 gap: 12,
                               }}
                             >
-                              <div
-                                style={{
-                                  width: 40,
-                                  height: 40,
-                                  borderRadius: "50%",
-                                  background:
-                                    "linear-gradient(135deg, var(--rausch), #C13584)",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  color: "white",
-                                  fontWeight: 700,
-                                  fontSize: 16,
-                                  flexShrink: 0,
-                                }}
-                              >
+                              <div className="m-av-owner">
                                 {b.guestName.charAt(0).toUpperCase()}
                               </div>
                               <div>
@@ -3215,6 +3139,7 @@ export default function OwnerPage() {
           --rausch:#FF385C; --violet:#6C5CE7; --green:#008A05; --amber:#C87D00;
           --ink:#222222; --gray:#717171; --line:#EBEBEB; --line-2:#DDDDDD;
           --bg:#FFFFFF; --bg-2:#F7F7F7; --card:#FFFFFF; --nav-bg:rgba(255,255,255,.92);
+          --bar-base:#FFD2DC;
           --shadow:0 6px 20px rgba(0,0,0,.10); --shadow-s:0 1px 2px rgba(0,0,0,.06);
           --brand-bg: var(--bg-2);
           --brand-surface: var(--card);
@@ -3227,6 +3152,7 @@ export default function OwnerPage() {
         [data-theme="dark"] {
           --ink:#F4F4F5; --gray:#A6A6AD; --line:#2C2C31; --line-2:#3A3A40;
           --bg:#131316; --bg-2:#1C1C20; --card:#1F1F23; --nav-bg:rgba(19,19,22,.9);
+          --bar-base:rgba(255,56,92,.34);
           --shadow:0 8px 24px rgba(0,0,0,.55); --shadow-s:0 1px 2px rgba(0,0,0,.5);
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -3234,6 +3160,167 @@ export default function OwnerPage() {
         input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
         input::placeholder { color: var(--gray); }
         select option { background: var(--brand-surface); color: var(--brand-text); }
+
+        /* ── Nav (from reference dashboard) ───────────────────────── */
+        .nav-in-owner {
+          background: var(--nav-bg);
+          backdrop-filter: saturate(180%) blur(10px);
+          border-bottom: 1px solid var(--brand-border);
+          padding: 0 32px;
+          height: 64px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          position: sticky;
+          top: 0;
+          z-index: 50;
+        }
+        .icon-btn-owner {
+          width: 38px; height: 38px;
+          border: 1px solid var(--brand-border);
+          border-radius: 50%;
+          background: var(--brand-surface);
+          color: var(--brand-text);
+          cursor: pointer;
+          display: grid;
+          place-items: center;
+          transition: box-shadow .15s, border-color .15s;
+        }
+        .icon-btn-owner:hover { box-shadow: var(--shadow-s); border-color: var(--brand-text); }
+        .btn-owner {
+          font-size: 13px; font-weight: 600; color: var(--brand-text);
+          border: 1px solid var(--brand-border); border-radius: 12px;
+          padding: 8px 16px; text-decoration: none; background: var(--brand-surface);
+          cursor: pointer; transition: .15s;
+        }
+        .btn-owner:hover { border-color: var(--brand-text); box-shadow: var(--shadow-s); }
+        .btn-owner.ghost-owner { color: var(--brand-text-muted); }
+
+        /* ── Period navigator ─────────────────────────────────────── */
+        .pnav-owner { display: flex; align-items: center; gap: 6px; }
+        .nav-arrow-owner {
+          width: 40px; height: 40px; border-radius: 50%;
+          border: 1px solid var(--brand-border); background: var(--brand-surface);
+          color: var(--brand-text); cursor: pointer; display: grid; place-items: center;
+          font-size: 18px; transition: .15s;
+        }
+        .nav-arrow-owner:hover { border-color: var(--brand-text); box-shadow: var(--shadow-s); }
+        .pnav-label-owner {
+          font-weight: 800; font-size: 13px; letter-spacing: -.01em;
+          min-width: 130px; text-align: center; color: var(--brand-text);
+        }
+        .seg-owner {
+          display: inline-flex; padding: 5px; gap: 4px; background: var(--bg-2); border-radius: 999px;
+          border: 1px solid var(--brand-border);
+        }
+        .seg-owner button {
+          border: 0; cursor: pointer; background: transparent; color: var(--gray);
+          font-size: 13px; font-weight: 700; padding: 8px 16px; border-radius: 999px; transition: .18s;
+        }
+        .seg-owner button:hover { color: var(--ink); }
+        .seg-owner button.active { background: var(--card); color: var(--ink); box-shadow: var(--shadow-s); }
+
+        /* ── Earnings hero + chart ────────────────────────────────── */
+        .earn-owner {
+          border: 1px solid var(--brand-border); border-radius: 20px; padding: 28px;
+          box-shadow: var(--shadow-s); background: var(--brand-surface);
+        }
+        .cap-owner { color: var(--brand-text-muted); font-size: 12.5px; font-weight: 700; }
+        .cap-owner span { color: var(--brand-text-muted); }
+        .big-owner {
+          font-size: clamp(30px,5vw,44px); font-weight: 800; letter-spacing: -.03em;
+          margin: 6px 0 6px; color: var(--brand-text);
+        }
+        .chart-owner { display: flex; align-items: flex-end; gap: 10px; height: 150px; margin-top: 22px; }
+        .bcol-owner { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; height: 100%; justify-content: flex-end; min-width: 0; }
+        .bwrap-owner { width: 100%; display: flex; justify-content: center; align-items: flex-end; height: 100%; }
+        .bar-owner {
+          width: 100%; max-width: 40px; border-radius: 8px 8px 4px 4px; background: var(--bar-base);
+          transition: height .55s cubic-bezier(.4,0,.2,1), background .15s;
+        }
+        .bcol-owner:hover .bar-owner { background: var(--rausch); }
+        .bx-owner { font-size: 11px; color: var(--brand-text-muted); font-weight: 600; white-space: nowrap; }
+        .earn-sub-owner {
+          margin-top: 14px; padding-top: 16px; border-top: 1px solid var(--brand-border);
+          display: flex; flex-wrap: wrap; gap: 8px 22px; font-size: 13px; color: var(--brand-text-muted);
+        }
+        .earn-sub-owner b { color: var(--brand-text); font-weight: 700; }
+
+        /* ── Stats grid ────────────────────────────────────────────── */
+        .stats-owner { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; }
+        .stat-owner {
+          border: 1px solid var(--brand-border); border-radius: 16px; padding: 18px 20px;
+          background: var(--brand-surface); transition: box-shadow .18s, transform .18s;
+        }
+        .stat-owner:hover { box-shadow: var(--shadow); transform: translateY(-2px); }
+        .stat-owner .lbl-owner { color: var(--brand-text-muted); font-size: 12.5px; font-weight: 700; }
+        .stat-owner .num-owner { font-size: 24px; font-weight: 800; letter-spacing: -.02em; margin-top: 6px; color: var(--brand-text); }
+
+        /* ── Stay mix ─────────────────────────────────────────────── */
+        .staymix-owner { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; }
+        .smcard-owner { border: 1px solid var(--brand-border); border-radius: 16px; padding: 18px; background: var(--brand-surface); }
+        .sm-top-owner { display: flex; align-items: baseline; justify-content: space-between; }
+        .sm-count-owner { font-size: 26px; font-weight: 800; letter-spacing: -.02em; color: var(--brand-text); }
+        .sm-pct-owner { font-size: 14px; font-weight: 800; }
+        .sm-label-owner { font-size: 13.5px; font-weight: 700; margin-top: 4px; display: flex; align-items: center; gap: 8px; color: var(--brand-text); }
+        .hrs-owner { font-size: 10.5px; font-weight: 700; color: var(--brand-text-muted); background: var(--bg-2); padding: 2px 8px; border-radius: 999px; }
+        .sm-note-owner { color: var(--brand-text-muted); font-size: 12px; margin-top: 2px; }
+        .sm-bar-owner { height: 6px; border-radius: 6px; margin-top: 14px; background: var(--bg-2); overflow: hidden; }
+        .sm-bar-owner > i { display: block; height: 100%; border-radius: 6px; transition: width .5s ease; }
+
+        /* ── Alerts (Redflags) ────────────────────────────────────── */
+        .alerts-owner { border: 1px solid var(--brand-border); border-radius: 20px; overflow: hidden; box-shadow: var(--shadow-s); background: var(--brand-surface); }
+        .alert-owner { display: flex; gap: 14px; align-items: flex-start; padding: 16px 22px; border-bottom: 1px solid var(--brand-border); }
+        .alert-owner:last-child { border-bottom: 0; }
+        .a-dot-owner { width: 9px; height: 9px; border-radius: 50%; margin-top: 6px; flex: none; }
+        .a-dot-owner.crit { background: var(--rausch); } .a-dot-owner.warn { background: var(--amber); }
+        .a-body-owner { flex: 1; min-width: 0; }
+        .a-title-owner { font-weight: 700; font-size: 14.5px; color: var(--brand-text); }
+        .a-desc-owner { color: var(--brand-text-muted); font-size: 13.5px; margin-top: 2px; }
+        .a-tag-owner { font-size: 11px; font-weight: 700; color: var(--brand-text-muted); border: 1px solid var(--brand-border); padding: 4px 10px; border-radius: 999px; white-space: nowrap; align-self: center; }
+
+        /* ── Expenses list ────────────────────────────────────────── */
+        .exp-owner { border: 1px solid var(--brand-border); border-radius: 20px; overflow: hidden; box-shadow: var(--shadow-s); background: var(--brand-surface); }
+        .exp-row-owner { display: flex; align-items: center; gap: 16px; padding: 16px 22px; border-bottom: 1px solid var(--brand-border); }
+        .exp-row-owner:last-of-type { border-bottom: 0; }
+        .exp-date-owner {
+          width: 54px; height: 54px; border-radius: 12px; background: var(--bg-2);
+          display: grid; place-items: center; text-align: center; flex: none; line-height: 1;
+        }
+        .exp-date-owner .m { font-size: 10px; font-weight: 800; text-transform: uppercase; color: var(--rausch); letter-spacing: .05em; }
+        .exp-date-owner .d { font-size: 19px; font-weight: 800; margin-top: 3px; color: var(--brand-text); }
+        .exp-info-owner { flex: 1; min-width: 0; }
+        .exp-title-owner { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+        .exp-note-owner { color: var(--brand-text); font-size: 13.5px; margin-top: 6px; white-space: pre-wrap; }
+        .exp-amt-owner { font-weight: 800; font-size: 17px; letter-spacing: -.01em; white-space: nowrap; color: var(--brand-text); }
+
+        /* ── Team member row ──────────────────────────────────────── */
+        .member-row-owner { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; }
+        .m-av-owner {
+          width: 36px; height: 36px; border-radius: 50%;
+          background: linear-gradient(135deg, var(--rausch), #C13584);
+          display: flex; align-items: center; justify-content: center;
+          color: white; font-weight: 700; font-size: 14px; flex-shrink: 0;
+        }
+
+        /* ── Filter selects styled as chips ───────────────────────── */
+        .chip-select-owner {
+          padding: 9px 12px; border: 1px solid var(--brand-border); border-radius: 999px;
+          font-size: 13px; font-weight: 600; color: var(--brand-text); background: var(--brand-surface);
+          outline: none; cursor: pointer; font-family: inherit; transition: .15s;
+        }
+        .chip-select-owner:hover { border-color: var(--brand-text); }
+
+        @media (max-width: 640px) {
+          .nav-in-owner { padding: 0 16px; }
+          .stats-owner, .staymix-owner { grid-template-columns: 1fr 1fr; }
+          .chart-owner { gap: 5px; height: 130px; }
+          .bar-owner { max-width: 24px; border-radius: 6px 6px 3px 3px; }
+          .bx-owner { font-size: 9px; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .bar-owner, .stat-owner, .sm-bar-owner > i, .chev { transition: none; }
+        }
       `}</style>
     </div>
   );
