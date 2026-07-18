@@ -49,20 +49,10 @@ function getCategory(stayType: string | null): Category {
 
 const TYPE_CONFIG: Record<
   Category,
-  {
-    slot: Slot;
-    inH: number;
-    outH: number;
-    label: string;
-    short: string;
-    color: string;
-    bg: string;
-  }
+  { slot: Slot; label: string; short: string; color: string; bg: string }
 > = {
   Day: {
     slot: "day",
-    inH: 8,
-    outH: 20,
     label: "Daycation",
     short: "DAY",
     color: "var(--ec-day)",
@@ -70,8 +60,6 @@ const TYPE_CONFIG: Record<
   },
   Night: {
     slot: "night",
-    inH: 14,
-    outH: 11,
     label: "Night stay",
     short: "NIGHT",
     color: "var(--ec-night)",
@@ -79,8 +67,6 @@ const TYPE_CONFIG: Record<
   },
   "Day Long": {
     slot: "full",
-    inH: 14,
-    outH: 11,
     label: "Full / long stay",
     short: "FULL",
     color: "var(--ec-full)",
@@ -88,8 +74,6 @@ const TYPE_CONFIG: Record<
   },
   Other: {
     slot: "full",
-    inH: 0,
-    outH: 24,
     label: "Other",
     short: "OTHER",
     color: "var(--ec-other)",
@@ -127,18 +111,29 @@ interface BookingBounds {
   end: number;
 }
 
+// Postgres timestamptz columns often come through as "2026-07-18 13:00:00+00"
+// (space separator, no colon in the offset) which some browsers' Date parser
+// rejects or mis-parses. Normalize to a strict ISO string before parsing.
+function parseTimestamp(raw: string): number {
+  let s = raw.trim();
+  if (s.includes(" ") && !s.includes("T")) s = s.replace(" ", "T");
+  s = s.replace(/([+-]\d{2})(\d{2})$/, "$1:$2"); // +0800 -> +08:00
+  s = s.replace(/([+-]\d{2})$/, "$1:00"); // +00 -> +00:00
+  const t = new Date(s).getTime();
+  return Number.isNaN(t) ? new Date(raw).getTime() : t;
+}
+
 function computeBounds(b: Booking): BookingBounds {
   const category = getCategory(b.stayType);
   const conf = TYPE_CONFIG[category];
-  const ci = startOfDay(new Date(b.checkIn)).getTime();
-  const co = startOfDay(new Date(b.checkOut)).getTime();
-  return {
-    booking: b,
-    category,
-    slot: conf.slot,
-    start: ci + conf.inH * 3600000,
-    end: co + conf.outH * 3600000,
-  };
+  // checkIn/checkOut are the real, precise instants for this stay — use them
+  // directly rather than re-deriving hours from the stay-type category
+  // (that previously produced wrong times whenever the actual booking didn't
+  // match the category's "typical" hours, e.g. a "Night (Short) 9PM-7AM" stay).
+  const start = parseTimestamp(b.checkIn);
+  let end = parseTimestamp(b.checkOut);
+  if (!(end > start)) end = start + 3600000; // guard against bad/equal data
+  return { booking: b, category, slot: conf.slot, start, end };
 }
 
 function fmtShort(ts: number) {
@@ -426,22 +421,26 @@ export default function UnitCalendar({
                   const conf = TYPE_CONFIG[o.category];
                   const dimmed = o.booking.status === "CHECKED_OUT";
                   const tip = `${o.booking.guestName}\n${
-                    conf.label
+                    o.booking.stayType || conf.label
                   }\n${fmtShort(o.start)} ${fmtTime(o.start)} → ${fmtShort(
                     o.end
                   )} ${fmtTime(o.end)}`;
+                  const style = pillStyle(o, top, height);
+                  const width =
+                    typeof style.width === "number" ? style.width : 0;
+                  const showTag = width >= 46;
+                  const showName = width >= 30;
                   return (
                     <div
                       key={o.booking.id}
                       className="evcal-res"
-                      style={{
-                        ...pillStyle(o, top, height),
-                        opacity: dimmed ? 0.55 : 1,
-                      }}
+                      style={{ ...style, opacity: dimmed ? 0.55 : 1 }}
                       title={tip}
                     >
-                      <span className="nm">{o.booking.guestName}</span>
-                      <span className="tag">{conf.short}</span>
+                      {showName && (
+                        <span className="nm">{o.booking.guestName}</span>
+                      )}
+                      {showTag && <span className="tag">{conf.short}</span>}
                     </div>
                   );
                 }
@@ -596,7 +595,7 @@ export default function UnitCalendar({
                     <div className="g">{o.booking.guestName}</div>
                     <div className="u">
                       {propertyLabel(o.booking.propertyId)} ·{" "}
-                      {TYPE_CONFIG[o.category].label}
+                      {o.booking.stayType || TYPE_CONFIG[o.category].label}
                     </div>
                   </div>
                   <span
@@ -623,7 +622,7 @@ export default function UnitCalendar({
                     <div className="g">{o.booking.guestName}</div>
                     <div className="u">
                       {propertyLabel(o.booking.propertyId)} ·{" "}
-                      {TYPE_CONFIG[o.category].label}
+                      {o.booking.stayType || TYPE_CONFIG[o.category].label}
                     </div>
                   </div>
                   <span
