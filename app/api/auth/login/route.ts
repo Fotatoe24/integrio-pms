@@ -10,14 +10,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Email and password are required' }, { status: 400 })
     }
 
+    // Accept either an email or a username in the same field, since
+    // Evangelina logs in by username and Integrio historically used email.
+    const identifier = email.toLowerCase().trim()
     const { data: user, error } = await supabaseAdmin
       .from('User')
       .select('*')
-      .eq('email', email.toLowerCase())
-      .single()
+      .or(`email.eq.${identifier},username.eq.${identifier}`)
+      .maybeSingle()
 
     if (error || !user) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 })
+    }
+
+    if (user.active === false) {
+      return NextResponse.json({ error: 'This account has been deactivated' }, { status: 403 })
     }
 
     const isValid = await verifyPassword(password, user.password)
@@ -25,18 +32,35 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 })
     }
 
-    const token = createToken({ id: user.id, email: user.email, role: user.role })
+    const token = await createToken({
+      id: user.id,
+      email: user.email,
+      username: user.username ?? null,
+      name: user.name,
+      role: user.role,
+      avatarColor: user.avatarColor,
+      mustChangePassword: !!user.mustChangePassword,
+    })
 
     const response = NextResponse.json({
       success: true,
-      user: { id: user.id, email: user.email, name: user.name, role: user.role }
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        name: user.name,
+        role: user.role,
+        avatarColor: user.avatarColor,
+        mustChangePassword: !!user.mustChangePassword,
+      },
     })
 
     response.cookies.set('auth-token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 7
+      maxAge: 60 * 60 * 24 * 7,
+      path: '/',
     })
 
     return response
