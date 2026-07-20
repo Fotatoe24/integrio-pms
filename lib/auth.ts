@@ -104,7 +104,14 @@ export interface IntegrioUser {
   email: string;
   username?: string | null;
   name: string;
-  role: Role;
+  // Intentionally NOT typed as `Role` here (unlike TokenPayload, which is
+  // what the server signs into the JWT). This is the loosely-typed object
+  // read back from localStorage on the client, and most pages still
+  // compare it against the old lowercase role strings ("owner", "booker",
+  // "auditor", "housekeeping") while the DB migration to the new
+  // OWNER_ADMIN/CO_OWNER/etc. set is in progress. Locking this to `Role`
+  // breaks every one of those comparisons with a TS2367 error.
+  role: string;
   owner_id: string | null;
   avatarColor?: string;
   mustChangePassword?: boolean;
