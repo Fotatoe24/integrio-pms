@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { verifyToken, ROUTE_ROLES } from "@/lib/auth";
 
 const publicRoutes = [
   "/login",
@@ -25,7 +26,7 @@ const publicRoutes = [
   "/api/owner/checklist",
 ];
 
-export function middleware(req: NextRequest) {
+export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const isPublic = publicRoutes.some((route) => pathname.startsWith(route));
 
@@ -36,8 +37,37 @@ export function middleware(req: NextRequest) {
   // Check for auth cookie
   const token = req.cookies.get("auth-token")?.value;
 
-  if (!token && !isPublic) {
+  if (!token) {
     return NextResponse.redirect(new URL("/login", req.url));
+  }
+
+  const payload = await verifyToken(token);
+  if (!payload) {
+    const res = NextResponse.redirect(new URL("/login", req.url));
+    res.cookies.delete("auth-token");
+    return res;
+  }
+
+  // Force a password reset before any other page becomes reachable.
+  if (payload.mustChangePassword && pathname !== "/dashboard/change-password") {
+    return NextResponse.redirect(
+      new URL("/dashboard/change-password", req.url)
+    );
+  }
+  if (
+    !payload.mustChangePassword &&
+    pathname === "/dashboard/change-password"
+  ) {
+    return NextResponse.redirect(new URL("/dashboard", req.url));
+  }
+
+  // Role-gated routes (API routes are matched here too, e.g. /api/admin/*
+  // — add entries to ROUTE_ROLES in lib/auth.ts as new sections are built).
+  const matched = Object.keys(ROUTE_ROLES).find((base) =>
+    pathname.startsWith(base)
+  );
+  if (matched && !ROUTE_ROLES[matched].includes(payload.role)) {
+    return NextResponse.redirect(new URL("/dashboard", req.url));
   }
 
   return NextResponse.next();
