@@ -9,6 +9,7 @@ const publicRoutes = [
   "/setup",
   "/test",
   "/verify",
+  "/api/auth/login",
   "/api/ical",
   "/api/invite-employee",
   "/api/forgot-password",
@@ -26,6 +27,35 @@ const publicRoutes = [
   "/api/owner/checklist",
 ];
 
+// ROUTE_ROLES keys are the new-style routes (e.g. /dashboard/financials).
+// Some of your actual pages still live under different paths (e.g. the
+// owner dashboard is /owner, not /dashboard/admin) — matched by longest
+// prefix below so a more specific rule always wins over a shorter one.
+function findRouteRule(pathname: string): string | null {
+  const matches = Object.keys(ROUTE_ROLES).filter((route) =>
+    pathname.startsWith(route)
+  );
+  if (matches.length === 0) return null;
+  return matches.sort((a, b) => b.length - a.length)[0];
+}
+
+// Kept in sync with ROLE_HOME_ROUTES in login/page.tsx and the roleRoutes
+// map in change-password/page.tsx. Accepts both new uppercase roles and
+// old lowercase ones in case User.role rows haven't fully migrated yet.
+const ROLE_HOME_ROUTES: Record<string, string> = {
+  OWNER_ADMIN: "/owner",
+  CO_OWNER: "/owner",
+  BOOKER: "/dashboard",
+  AUDITOR: "/auditor",
+  HOUSEKEEPING: "/housekeeping",
+  ADMIN: "/owner",
+  STAFF: "/dashboard",
+  owner: "/owner",
+  booker: "/dashboard",
+  auditor: "/auditor",
+  housekeeping: "/housekeeping",
+};
+
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const isPublic = publicRoutes.some((route) => pathname.startsWith(route));
@@ -34,7 +64,6 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // Check for auth cookie
   const token = req.cookies.get("auth-token")?.value;
 
   if (!token) {
@@ -42,32 +71,23 @@ export async function middleware(req: NextRequest) {
   }
 
   const payload = await verifyToken(token);
+
   if (!payload) {
-    const res = NextResponse.redirect(new URL("/login", req.url));
-    res.cookies.delete("auth-token");
-    return res;
+    // Cookie present but invalid/expired — treat as logged out.
+    const response = NextResponse.redirect(new URL("/login", req.url));
+    response.cookies.delete("auth-token");
+    return response;
   }
 
-  // Force a password reset before any other page becomes reachable.
-  if (payload.mustChangePassword && pathname !== "/dashboard/change-password") {
-    return NextResponse.redirect(
-      new URL("/dashboard/change-password", req.url)
-    );
-  }
-  if (
-    !payload.mustChangePassword &&
-    pathname === "/dashboard/change-password"
-  ) {
-    return NextResponse.redirect(new URL("/dashboard", req.url));
-  }
-
-  // Role-gated routes (API routes are matched here too, e.g. /api/admin/*
-  // — add entries to ROUTE_ROLES in lib/auth.ts as new sections are built).
-  const matched = Object.keys(ROUTE_ROLES).find((base) =>
-    pathname.startsWith(base)
-  );
-  if (matched && !ROUTE_ROLES[matched].includes(payload.role)) {
-    return NextResponse.redirect(new URL("/dashboard", req.url));
+  const routeRule = findRouteRule(pathname);
+  if (routeRule) {
+    const allowedRoles = ROUTE_ROLES[routeRule];
+    if (!allowedRoles.includes(payload.role)) {
+      // Authenticated, but not allowed on this route — bounce to their
+      // own home instead of /login, since they ARE logged in.
+      const home = ROLE_HOME_ROUTES[payload.role] ?? "/dashboard";
+      return NextResponse.redirect(new URL(home, req.url));
+    }
   }
 
   return NextResponse.next();

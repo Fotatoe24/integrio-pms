@@ -91,3 +91,63 @@ export async function verifyToken(token: string): Promise<TokenPayload | null> {
     return null;
   }
 }
+
+// ── Client-side helpers (browser only) ──────────────────────────────
+// These read the cached user object that /login writes to localStorage
+// after a successful sign-in. They do NOT re-verify the JWT — that only
+// happens server-side (middleware.ts / API routes via verifyToken above).
+// Restored here because app/dashboard/**, app/settings, app/auditor,
+// app/housekeeping, and app/change-password all import these directly.
+
+export interface IntegrioUser {
+  id: string;
+  email: string;
+  username?: string | null;
+  name: string;
+  role: Role;
+  owner_id: string | null;
+  avatarColor?: string;
+  mustChangePassword?: boolean;
+}
+
+export function getCurrentUser(): IntegrioUser | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem("integrio_user");
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+// Maps a role to its "home" route. Kept in sync with ROUTE_ROLES above
+// and with the roleRoutes maps duplicated in login/page.tsx and
+// change-password/page.tsx — if you add a role, update all three.
+const ROLE_HOME_ROUTES: Record<string, string> = {
+  OWNER_ADMIN: "/owner",
+  CO_OWNER: "/owner",
+  BOOKER: "/dashboard",
+  AUDITOR: "/auditor",
+  HOUSEKEEPING: "/housekeeping",
+  ADMIN: "/owner",
+  STAFF: "/dashboard",
+};
+
+export function requireRole(
+  allowedRoles: string[],
+  router: { push: (path: string) => void }
+): IntegrioUser | null {
+  const user = getCurrentUser();
+
+  if (!user) {
+    router.push("/login");
+    return null;
+  }
+
+  if (!allowedRoles.includes(user.role)) {
+    router.push(ROLE_HOME_ROUTES[user.role] ?? "/login");
+    return null;
+  }
+
+  return user;
+}

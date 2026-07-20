@@ -1,8 +1,26 @@
 "use client";
 
-import { supabase } from "@/lib/supabase";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+
+// Accepts both the new uppercase roles (OWNER_ADMIN, CO_OWNER, HOUSEKEEPING,
+// BOOKER, AUDITOR, ADMIN, STAFF) and the old lowercase ones (owner, booker,
+// auditor, housekeeping) — keeps this working whether or not User.role rows
+// have been migrated to the new set yet. Keep in sync with ROLE_HOME_ROUTES
+// in lib/auth.ts and the roleRoutes map in change-password/page.tsx.
+const ROLE_HOME_ROUTES: Record<string, string> = {
+  OWNER_ADMIN: "/owner",
+  CO_OWNER: "/owner",
+  BOOKER: "/dashboard",
+  AUDITOR: "/auditor",
+  HOUSEKEEPING: "/housekeeping",
+  ADMIN: "/owner",
+  STAFF: "/dashboard",
+  owner: "/owner",
+  booker: "/dashboard",
+  auditor: "/auditor",
+  housekeeping: "/housekeeping",
+};
 
 export default function LoginPage() {
   const router = useRouter();
@@ -22,43 +40,42 @@ export default function LoginPage() {
     setError("");
 
     try {
-      const { data: user, error: fetchError } = await supabase
-        .from("User")
-        .select("*")
-        .eq("email", email.toLowerCase())
-        .single();
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        // "email" field doubles as username-or-email — the API route
+        // matches against either column.
+        body: JSON.stringify({ email, password }),
+      });
 
-      if (fetchError || !user) {
-        setError("Invalid credentials");
+      const json = await res.json();
+
+      if (!res.ok) {
+        setError(json.error || "Invalid credentials");
         setLoading(false);
         return;
       }
 
-      const bcrypt = await import("bcryptjs");
-      const isValid = await bcrypt.compare(password, user.password);
+      const user = json.user;
 
-      if (!isValid) {
-        setError("Invalid credentials");
-        setLoading(false);
-        return;
-      }
-
-      document.cookie = `auth-token=loggedin; path=/; max-age=${
-        60 * 60 * 24 * 7
-      }`;
-
+      // The httpOnly auth-token cookie is already set by the API route's
+      // response — no need (and no way, since it's httpOnly) to touch
+      // document.cookie here.
       localStorage.setItem(
         "integrio_user",
         JSON.stringify({
           id: user.id,
           email: user.email,
+          username: user.username ?? null,
           name: user.name,
           role: user.role,
           owner_id: user.owner_id ?? null,
+          avatarColor: user.avatarColor,
+          mustChangePassword: !!user.mustChangePassword,
         })
       );
 
-      if (user.role === "housekeeping") {
+      if (String(user.role).toLowerCase() === "housekeeping") {
         fetch("/api/housekeeping/login-log", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -69,16 +86,12 @@ export default function LoginPage() {
         }).catch(() => {});
       }
 
-      const roleRoutes: Record<string, string> = {
-        owner: "/owner",
-        booker: "/dashboard",
-        auditor: "/auditor",
-        housekeeping: "/housekeeping",
-        ADMIN: "/owner",
-        STAFF: "/dashboard",
-      };
+      if (user.mustChangePassword) {
+        window.location.href = "/change-password";
+        return;
+      }
 
-      const destination = roleRoutes[user.role] ?? "/dashboard";
+      const destination = ROLE_HOME_ROUTES[user.role] ?? "/dashboard";
       window.location.href = destination;
     } catch {
       setError("Something went wrong. Please try again.");
@@ -111,23 +124,23 @@ export default function LoginPage() {
         </h1>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-          {/* Email */}
+          {/* Email / Username */}
           <div>
             <label
               htmlFor="email"
               className="block text-sm text-gray-700 mb-1.5"
             >
-              Email
+              Email or Username
             </label>
             <div className="relative">
               <input
                 id="email"
-                type="email"
+                type="text"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter your email"
+                placeholder="Enter your email or username"
                 required
-                autoComplete="email"
+                autoComplete="username"
                 className="w-full rounded-lg border border-gray-300 pl-4 pr-11 py-3 text-[15px] text-gray-800 placeholder-gray-400 outline-none transition-colors focus:border-[#4a90e2] focus:ring-2 focus:ring-[#4a90e2]/20"
               />
               <svg
