@@ -175,8 +175,10 @@ export default function OwnerExpenseRequestsPage() {
               fontSize: 13.5,
               fontWeight: 600,
               border: "none",
-              background: activeTab === tab ? "rgba(255,56,92,.12)" : "transparent",
-              color: activeTab === tab ? "var(--rausch)" : "var(--brand-text-muted)",
+              background:
+                activeTab === tab ? "rgba(255,56,92,.12)" : "transparent",
+              color:
+                activeTab === tab ? "var(--rausch)" : "var(--brand-text-muted)",
               cursor: "pointer",
             }}
           >
@@ -186,7 +188,13 @@ export default function OwnerExpenseRequestsPage() {
       </div>
 
       {loading ? (
-        <div style={{ textAlign: "center", padding: 40, color: "var(--brand-text-muted)" }}>
+        <div
+          style={{
+            textAlign: "center",
+            padding: 40,
+            color: "var(--brand-text-muted)",
+          }}
+        >
           Loading requests...
         </div>
       ) : requests.length === 0 ? (
@@ -242,7 +250,13 @@ export default function OwnerExpenseRequestsPage() {
                       marginBottom: 4,
                     }}
                   >
-                    <span style={{ fontWeight: 700, color: "var(--brand-text)", fontSize: 15 }}>
+                    <span
+                      style={{
+                        fontWeight: 700,
+                        color: "var(--brand-text)",
+                        fontSize: 15,
+                      }}
+                    >
                       {r.employee?.name || "Unknown employee"}
                     </span>
                     <span
@@ -258,11 +272,20 @@ export default function OwnerExpenseRequestsPage() {
                       {r.category}
                     </span>
                   </div>
-                  <div style={{ fontSize: 12, color: "var(--brand-text-muted)" }}>
+                  <div
+                    style={{ fontSize: 12, color: "var(--brand-text-muted)" }}
+                  >
                     {formatDate(r.date)}
-                    {r.Property && ` · 🏠 ${r.Property.shortName || r.Property.name}`}
+                    {r.Property &&
+                      ` · 🏠 ${r.Property.shortName || r.Property.name}`}
                   </div>
-                  <p style={{ fontSize: 13.5, color: "var(--brand-text)", marginTop: 8 }}>
+                  <p
+                    style={{
+                      fontSize: 13.5,
+                      color: "var(--brand-text)",
+                      marginTop: 8,
+                    }}
+                  >
                     {r.note}
                   </p>
                   {r.receiptUrl && (
@@ -270,7 +293,11 @@ export default function OwnerExpenseRequestsPage() {
                       href={r.receiptUrl}
                       target="_blank"
                       rel="noreferrer"
-                      style={{ fontSize: 12, color: "var(--rausch)", fontWeight: 600 }}
+                      style={{
+                        fontSize: 12,
+                        color: "var(--rausch)",
+                        fontWeight: 600,
+                      }}
                     >
                       View receipt →
                     </a>
@@ -290,7 +317,13 @@ export default function OwnerExpenseRequestsPage() {
                 </div>
 
                 <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 20, fontWeight: 800, color: "var(--brand-text)" }}>
+                  <div
+                    style={{
+                      fontSize: 20,
+                      fontWeight: 800,
+                      color: "var(--brand-text)",
+                    }}
+                  >
                     {formatCurrency(Number(r.amount))}
                   </div>
                   <span
@@ -348,7 +381,9 @@ export default function OwnerExpenseRequestsPage() {
                           border: "1px solid rgba(255,56,92,.3)",
                           background: "rgba(255,56,92,.08)",
                           color: "var(--rausch)",
-                          cursor: rejectionReason.trim() ? "pointer" : "not-allowed",
+                          cursor: rejectionReason.trim()
+                            ? "pointer"
+                            : "not-allowed",
                         }}
                       >
                         Confirm reject
