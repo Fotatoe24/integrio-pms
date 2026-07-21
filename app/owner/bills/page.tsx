@@ -30,7 +30,14 @@ interface Bill {
 
 // Common bill categories, kept as free-text `key` so owners aren't locked
 // into a fixed enum — this list just seeds the dropdown with sane defaults.
-const COMMON_KEYS = ["electricity", "water", "internet", "association_dues", "insurance", "other"];
+const COMMON_KEYS = [
+  "electricity",
+  "water",
+  "internet",
+  "association_dues",
+  "insurance",
+  "other",
+];
 
 function monthLabel(monthStr: string) {
   const d = new Date(monthStr);
@@ -39,7 +46,10 @@ function monthLabel(monthStr: string) {
 
 function currentMonthStr() {
   const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(
+    2,
+    "0"
+  )}-01`;
 }
 
 function shiftMonth(monthStr: string, delta: number) {
@@ -303,7 +313,13 @@ export default function OwnerBillsPage() {
 
       {/* Bills list */}
       {loading ? (
-        <div style={{ textAlign: "center", padding: 40, color: "var(--brand-text-muted)" }}>
+        <div
+          style={{
+            textAlign: "center",
+            padding: 40,
+            color: "var(--brand-text-muted)",
+          }}
+        >
           Loading bills...
         </div>
       ) : properties.length === 0 ? (
@@ -345,7 +361,13 @@ export default function OwnerBillsPage() {
                     marginBottom: 4,
                   }}
                 >
-                  <span style={{ fontWeight: 700, color: "var(--brand-text)", fontSize: 15 }}>
+                  <span
+                    style={{
+                      fontWeight: 700,
+                      color: "var(--brand-text)",
+                      fontSize: 15,
+                    }}
+                  >
                     {bill.label || bill.key}
                   </span>
                   {bill.recurring && (
@@ -369,7 +391,13 @@ export default function OwnerBillsPage() {
                   {bill.accountNumber && ` · Acct ${bill.accountNumber}`}
                 </div>
                 {bill.note && (
-                  <div style={{ fontSize: 12, color: "var(--brand-text-muted)", marginTop: 4 }}>
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: "var(--brand-text-muted)",
+                      marginTop: 4,
+                    }}
+                  >
                     📝 {bill.note}
                   </div>
                 )}
@@ -377,7 +405,13 @@ export default function OwnerBillsPage() {
 
               <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
                 <div style={{ textAlign: "right" }}>
-                  <div style={{ fontWeight: 800, fontSize: 16, color: "var(--brand-text)" }}>
+                  <div
+                    style={{
+                      fontWeight: 800,
+                      fontSize: 16,
+                      color: "var(--brand-text)",
+                    }}
+                  >
                     {formatCurrency(Number(bill.amountDue))}
                   </div>
                   <span
@@ -386,7 +420,9 @@ export default function OwnerBillsPage() {
                       fontWeight: 700,
                       padding: "2px 10px",
                       borderRadius: 999,
-                      background: bill.paid ? "rgba(0,138,5,.13)" : "rgba(200,125,0,.15)",
+                      background: bill.paid
+                        ? "rgba(0,138,5,.13)"
+                        : "rgba(200,125,0,.15)",
                       color: bill.paid ? "var(--green)" : "var(--amber)",
                     }}
                   >
@@ -395,15 +431,24 @@ export default function OwnerBillsPage() {
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
                   {bill.paid ? (
-                    <button onClick={() => unmarkPaid(bill)} style={secondaryBtnStyle}>
+                    <button
+                      onClick={() => unmarkPaid(bill)}
+                      style={secondaryBtnStyle}
+                    >
                       Undo
                     </button>
                   ) : (
-                    <button onClick={() => markPaid(bill)} style={primaryBtnStyle}>
+                    <button
+                      onClick={() => markPaid(bill)}
+                      style={primaryBtnStyle}
+                    >
                       Mark Paid
                     </button>
                   )}
-                  <button onClick={() => handleDelete(bill)} style={dangerBtnStyle}>
+                  <button
+                    onClick={() => handleDelete(bill)}
+                    style={dangerBtnStyle}
+                  >
                     Delete
                   </button>
                 </div>
@@ -447,7 +492,13 @@ export default function OwnerBillsPage() {
                 marginBottom: 24,
               }}
             >
-              <h2 style={{ fontSize: 20, fontWeight: 800, color: "var(--brand-text)" }}>
+              <h2
+                style={{
+                  fontSize: 20,
+                  fontWeight: 800,
+                  color: "var(--brand-text)",
+                }}
+              >
                 Add Bill — {monthLabel(month)}
               </h2>
               <button
@@ -472,7 +523,9 @@ export default function OwnerBillsPage() {
                 <label style={labelStyle}>Unit *</label>
                 <select
                   value={form.propertyId}
-                  onChange={(e) => setForm((f) => ({ ...f, propertyId: e.target.value }))}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, propertyId: e.target.value }))
+                  }
                   style={inputStyle}
                 >
                   {properties.map((p) => (
@@ -483,12 +536,20 @@ export default function OwnerBillsPage() {
                 </select>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 12,
+                }}
+              >
                 <div>
                   <label style={labelStyle}>Bill type *</label>
                   <select
                     value={form.key}
-                    onChange={(e) => setForm((f) => ({ ...f, key: e.target.value }))}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, key: e.target.value }))
+                    }
                     style={inputStyle}
                   >
                     {COMMON_KEYS.map((k) => (
@@ -505,7 +566,9 @@ export default function OwnerBillsPage() {
                     min="0"
                     step="0.01"
                     value={form.amountDue}
-                    onChange={(e) => setForm((f) => ({ ...f, amountDue: e.target.value }))}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, amountDue: e.target.value }))
+                    }
                     placeholder="0.00"
                     style={inputStyle}
                   />
@@ -517,13 +580,21 @@ export default function OwnerBillsPage() {
                 <input
                   type="text"
                   value={form.label}
-                  onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, label: e.target.value }))
+                  }
                   placeholder="e.g. Meralco — Unit 1116"
                   style={inputStyle}
                 />
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 12,
+                }}
+              >
                 <div>
                   <label style={labelStyle}>Due day of month</label>
                   <input
@@ -531,7 +602,9 @@ export default function OwnerBillsPage() {
                     min="1"
                     max="31"
                     value={form.dueDay}
-                    onChange={(e) => setForm((f) => ({ ...f, dueDay: e.target.value }))}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, dueDay: e.target.value }))
+                    }
                     placeholder="e.g. 15"
                     style={inputStyle}
                   />
@@ -541,7 +614,9 @@ export default function OwnerBillsPage() {
                   <input
                     type="text"
                     value={form.accountNumber}
-                    onChange={(e) => setForm((f) => ({ ...f, accountNumber: e.target.value }))}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, accountNumber: e.target.value }))
+                    }
                     style={inputStyle}
                   />
                 </div>
@@ -560,16 +635,21 @@ export default function OwnerBillsPage() {
                 <input
                   type="checkbox"
                   checked={form.recurring}
-                  onChange={(e) => setForm((f) => ({ ...f, recurring: e.target.checked }))}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, recurring: e.target.checked }))
+                  }
                 />
-                Recurs monthly (a reminder for next month — doesn't auto-create it yet)
+                Recurs monthly (a reminder for next month — doesn't auto-create
+                it yet)
               </label>
 
               <div>
                 <label style={labelStyle}>Note</label>
                 <textarea
                   value={form.note}
-                  onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, note: e.target.value }))
+                  }
                   rows={2}
                   style={{ ...inputStyle, resize: "vertical" }}
                 />
@@ -642,7 +722,15 @@ export default function OwnerBillsPage() {
   );
 }
 
-function EmptyState({ icon, title, desc }: { icon: string; title: string; desc: string }) {
+function EmptyState({
+  icon,
+  title,
+  desc,
+}: {
+  icon: string;
+  title: string;
+  desc: string;
+}) {
   return (
     <div
       style={{
