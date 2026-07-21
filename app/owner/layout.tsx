@@ -15,10 +15,13 @@ const NAV_ITEMS: { href: string; label: string }[] = [
   { href: "/owner/payments", label: "Payments" },
   { href: "/owner/bookings", label: "Bookings" },
   { href: "/owner/calendar", label: "Calendar" },
+  { href: "/owner/bills", label: "Bills" },
+  { href: "/owner/expense-requests", label: "Expense Requests" },
 ];
 
 function OwnerChrome({ children }: { children: React.ReactNode }) {
-  const { user, loading, theme, toggleTheme, flags, flagsLoading, logout } = useOwnerData();
+  const { user, loading, theme, toggleTheme, flags, flagsLoading, logout } =
+    useOwnerData();
   const pathname = usePathname();
   const router = useRouter();
 
@@ -31,7 +34,8 @@ function OwnerChrome({ children }: { children: React.ReactNode }) {
       style={{
         minHeight: "100vh",
         background: "var(--brand-bg)",
-        fontFamily: '"Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        fontFamily:
+          '"Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
         color: "var(--brand-text)",
         transition: "background-color .2s, color .2s",
       }}
@@ -75,7 +79,10 @@ function OwnerChrome({ children }: { children: React.ReactNode }) {
                 gap: 6,
                 fontSize: 12,
                 fontWeight: 800,
-                background: dangerFlags > 0 ? "rgba(255,56,92,.14)" : "rgba(200,125,0,.15)",
+                background:
+                  dangerFlags > 0
+                    ? "rgba(255,56,92,.14)"
+                    : "rgba(200,125,0,.15)",
                 color: dangerFlags > 0 ? "var(--rausch)" : "var(--amber)",
                 border: "none",
                 borderRadius: 999,
@@ -89,7 +96,11 @@ function OwnerChrome({ children }: { children: React.ReactNode }) {
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontSize: 13, color: "var(--brand-text)", marginRight: 4 }}>{user.name}</span>
+          <span
+            style={{ fontSize: 13, color: "var(--brand-text)", marginRight: 4 }}
+          >
+            {user.name}
+          </span>
 
           <button
             onClick={toggleTheme}
@@ -136,7 +147,9 @@ function OwnerChrome({ children }: { children: React.ReactNode }) {
         </div>
       </div>
 
-      <div style={{ maxWidth: 1120, margin: "0 auto", padding: "32px 24px 80px" }}>
+      <div
+        style={{ maxWidth: 1120, margin: "0 auto", padding: "32px 24px 80px" }}
+      >
         {/* Title */}
         <div style={{ marginBottom: 24 }}>
           <h1
@@ -156,9 +169,19 @@ function OwnerChrome({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* Nav tabs */}
-        <div style={{ display: "flex", gap: 8, marginBottom: 24, flexWrap: "wrap" }}>
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            marginBottom: 24,
+            flexWrap: "wrap",
+          }}
+        >
           {NAV_ITEMS.map((item) => {
-            const active = item.href === "/owner" ? pathname === "/owner" : pathname?.startsWith(item.href);
+            const active =
+              item.href === "/owner"
+                ? pathname === "/owner"
+                : pathname?.startsWith(item.href);
             return (
               <Link
                 key={item.href}
@@ -201,7 +224,13 @@ function OwnerChrome({ children }: { children: React.ReactNode }) {
         </div>
 
         {loading ? (
-          <div style={{ textAlign: "center", padding: 80, color: "var(--brand-text-muted)" }}>
+          <div
+            style={{
+              textAlign: "center",
+              padding: 80,
+              color: "var(--brand-text-muted)",
+            }}
+          >
             Loading...
           </div>
         ) : (
@@ -212,7 +241,11 @@ function OwnerChrome({ children }: { children: React.ReactNode }) {
   );
 }
 
-export default function OwnerLayout({ children }: { children: React.ReactNode }) {
+export default function OwnerLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <OwnerDataProvider>
       <OwnerChrome>{children}</OwnerChrome>
