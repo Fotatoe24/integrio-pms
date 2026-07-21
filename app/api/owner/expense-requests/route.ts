@@ -38,8 +38,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       requests: [],
       employees: [],
-      note:
-        "No employees are linked to a login account yet, so there's nothing to scope expense requests to. Employee rows need a userId pointing at a User with this owner_id.",
+      note: "No employees are linked to a login account yet, so there's nothing to scope expense requests to. Employee rows need a userId pointing at a User with this owner_id.",
     });
   }
 
